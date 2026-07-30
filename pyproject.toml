@@ -1,0 +1,10 @@
+[project]
+name = "rfid_uhf_in_r200_algorithms"
+version = "0.1.0"
+description = "RFID UHF IN-R200 Algorithms and Tools to work with it"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "dnfile>=0.18.0",
+    "pyserial>=3.5",
+]
