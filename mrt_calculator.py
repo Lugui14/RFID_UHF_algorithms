@@ -61,25 +61,56 @@ class MRTCalculator:
         self.reader.stop_inventory()
         return detected
 
-    def linear_sweep_mrt(self) -> Dict[str, float]:
+    def linear_sweep_mrt(self, verbose: bool = True) -> Dict[str, float]:
         """
         Sweeps reader transmit power from min_power to max_power.
         Returns a dict mapping EPC -> MRT (dBm) for all detected tags.
         """
         mrt_results: Dict[str, float] = {}
         curr_power = self.min_power
-        print(f"\n🔍 Starting Linear Power Sweep ({self.min_power} dBm to {self.max_power} dBm, step {self.power_step} dBm)...")
+        if verbose:
+            print(f"\n🔍 Starting Linear Power Sweep ({self.min_power} dBm to {self.max_power} dBm, step {self.power_step} dBm)...")
 
         while curr_power <= self.max_power:
             detected = self.test_tag_read(curr_power)
             for epc in detected:
                 if epc not in mrt_results:
                     mrt_results[epc] = curr_power
-                    print(f"  🎯 [MRT FOUND] EPC: {epc} -> MRT = {curr_power:.1f} dBm")
+                    if verbose:
+                        print(f"  🎯 [MRT FOUND] EPC: {epc} -> MRT = {curr_power:.1f} dBm")
 
             curr_power = round(curr_power + self.power_step, 2)
 
         return mrt_results
+
+    def linear_sweep_details(self, verbose: bool = False) -> Dict[str, dict]:
+        """
+        Sweeps reader transmit power from min_power to max_power.
+        Returns a dict mapping EPC -> {mrt, rssi, pc, count} for all detected tags.
+        """
+        results: Dict[str, dict] = {}
+        curr_power = self.min_power
+        if verbose:
+            print(f"\n🔍 Starting Linear Power Sweep ({self.min_power} dBm to {self.max_power} dBm, step {self.power_step} dBm)...")
+
+        while curr_power <= self.max_power:
+            detected = self.test_tag_read(curr_power)
+            for epc, info in detected.items():
+                if epc not in results:
+                    results[epc] = {
+                        "mrt": curr_power,
+                        "rssi": info["rssi"],
+                        "pc": info["pc"],
+                        "count": info["count"]
+                    }
+                    if verbose:
+                        print(f"  🎯 [MRT FOUND] EPC: {epc} -> MRT = {curr_power:.1f} dBm | RSSI: -{info['rssi']} dBm")
+                else:
+                    results[epc]["count"] += info["count"]
+
+            curr_power = round(curr_power + self.power_step, 2)
+
+        return results
 
     def binary_search_mrt(self, target_epc: str) -> Optional[float]:
         """
