@@ -1,145 +1,106 @@
 """
 ===================================================================================
- Main Application for IN-R200 UHF RFID Reader
+ Experimento 3 - Passo 2: Solo com Adição de 100g de Água (20 cm)
 ===================================================================================
- Description:
- - Initializes native IN-R200 Python reader driver.
- - Integrates MRTCalculator to perform periodic MRT scanning every second.
- - Dynamically loads cup configurations from anotacoes.md (format: copo_name: sensing_epc - reference_epc).
- - Implements 5-second inactivity timeout (marks tags as 'Not seen' after 5s without reads).
- - Calculates DMRT (MRT_sensing - MRT_reference) for each active cup in real time.
- - Displays all tags and DMRT calculations in a structured tabular format.
- - Automatically exports a graphical DMRT chart (PNG) upon stopping detection.
+ Descrição:
+ - Medição de MRT, DMRT e RSSI ao longo do tempo (alvo: 260 varreduras / ~15 min reais).
+ - Tag Sensoriamento : E2806995000050136FD09D75
+ - Tag Referência    : E2806995000050136FD0A175
+ - Solo              : Turfa fibrosa + 100g de água adicionada
+ - Alcance MRT       : 15.0 dBm a 32.0 dBm (Especificação do leitor + ganho de 6 dBi da antena)
+ - Distância da antena: ~20 cm
+ - Ao encerrar, exporta o gráfico de 3 painéis (MRT, DMRT, RSSI) e o relatório CSV
+   em experimento_3/solo_100g_agua_grafico.png e experimento_3/solo_100g_agua_resultados.csv.
 ===================================================================================
 """
 
 import os
-import time
 import sys
+import time
+from typing import Dict
 from in_r200_driver import INR200Reader
 from mrt_calculator import MRTCalculator
 from dmrt_exporter import DMRTExporter
 
+# Quantidade alvo de leituras/varreduras (260 varreduras equivalem a ~15 minutos reais)
+TARGET_READINGS = 260
 
-def load_cups_config(filepath: str = "anotacoes.md") -> dict:
-    """
-    Parses cup tag configurations dynamically from an annotations text/markdown file.
-    Format expected per line:
-        copo <nome>: <epc_sensoriamento> - <epc_referencia>
-    """
-    cups = {}
-    if not os.path.exists(filepath):
-        return cups
+# Tag configuration for Experimento 3
+SENSING_EPC = "E2806995000050136FD09D75"
+REFERENCE_EPC = "E2806995000050136FD0A175"
+SETUP_LABEL = "Solo 100g Água"
 
-    try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            for line in f:
-                line_clean = line.strip()
-                if not line_clean or line_clean.startswith("#"):
-                    continue
-                if ":" in line_clean and "-" in line_clean:
-                    parts = line_clean.split(":", 1)
-                    cup_name = parts[0].strip().title()
-                    epcs = parts[1].split("-", 1)
-                    if len(epcs) == 2:
-                        sensing = epcs[0].strip().upper()
-                        reference = epcs[1].strip().upper()
-                        cups[cup_name] = {
-                            "sensing": sensing,
-                            "reference": reference
-                        }
-    except Exception as e:
-        print(f"⚠️ Error reading annotations file '{filepath}': {e}")
+TAG_TIMEOUT = 10.0
 
-    return cups
-
-
-# Timeout threshold in seconds (consider tag inactive/'Not seen' after 5.0 seconds)
-TAG_TIMEOUT = 5.0
-
-# Dictionary to store unique scanned tags:
-# Key   : EPC hex string
-# Value : Dict containing metadata (read count, rssi, pc, raw_mrt, filtered_mrt, first/last seen)
-scanned_tags = {}
+# Store unique scanned tags metadata
+scanned_tags: Dict[str, dict] = {}
 
 
 def is_tag_active(epc: str, current_time: float) -> bool:
-    """
-    Returns True if the tag was read within the last TAG_TIMEOUT seconds, False otherwise.
-    """
+    """Returns True if the tag was read within the last TAG_TIMEOUT seconds."""
     if epc not in scanned_tags:
         return False
     return (current_time - scanned_tags[epc]["last_seen"]) <= TAG_TIMEOUT
 
 
-def print_table(second_counter: int, current_time: float, cups_config: dict):
+def print_table(reading_counter: int, current_time: float):
     """
-    Prints a formatted table displaying tags grouped by cup and calculates real-time DMRT.
-    Tags not read for > 5 seconds are displayed as 'Not seen' and stop contributing to DMRT.
+    Prints a formatted table displaying real-time MRT, DMRT and RSSI for Experimento 3.
     """
-    header_title = f" SECOND {second_counter:04d} | Real-Time Periodic MRT & DMRT Monitor"
+    pct = (reading_counter / TARGET_READINGS) * 100.0
+    header = f" EXPERIMENTO 3 - SOLO + 100G ÁGUA (20 CM) | Varredura {reading_counter:04d}/{TARGET_READINGS:04d} ({pct:.1f}% concluído)"
     divider = "+" + "-" * 17 + "+" + "-" * 12 + "+" + "-" * 26 + "+" + "-" * 11 + "+" + "-" * 13 + "+" + "-" * 16 + "+" + "-" * 12 + "+"
-    
+
     print("\n" + "=" * 114)
-    print(f"{header_title:<114}")
+    print(f"{header:<114}")
     print("=" * 114)
     print(divider)
-    print(f"| {'Cup / Group':<15} | {'Role':<10} | {'EPC Code':<24} | {'RSSI':<9} | {'Raw MRT':<11} | {'Filtered MRT':<14} | {'DMRT':<10} |")
+    print(f"| {'Item / Setup':<15} | {'Função':<10} | {'Código EPC':<24} | {'RSSI':<9} | {'Raw MRT':<11} | {'Filtered MRT':<14} | {'DMRT':<10} |")
     print(divider)
 
-    assigned_epcs = set()
+    s_active = is_tag_active(SENSING_EPC, current_time)
+    r_active = is_tag_active(REFERENCE_EPC, current_time)
 
-    # Render configured cups from anotacoes.md
-    for cup_name, tags in cups_config.items():
-        sensing_epc = tags["sensing"].upper()
-        reference_epc = tags["reference"].upper()
-        assigned_epcs.add(sensing_epc)
-        assigned_epcs.add(reference_epc)
+    dmrt_str = "N/A"
+    if s_active and r_active:
+        dmrt_val = MRTCalculator.calculate_dmrt(
+            scanned_tags[SENSING_EPC]["filtered_mrt"],
+            scanned_tags[REFERENCE_EPC]["filtered_mrt"]
+        )
+        dmrt_str = f"{dmrt_val:+.2f} dB"
 
-        s_active = is_tag_active(sensing_epc, current_time)
-        r_active = is_tag_active(reference_epc, current_time)
+    # Sensing Tag Row
+    if s_active:
+        info = scanned_tags[SENSING_EPC]
+        rssi_str = f"-{info['rssi']} dBm"
+        raw_mrt_str = f"{info['raw_mrt']:.1f} dBm"
+        filt_mrt_str = f"{info['filtered_mrt']:.2f} dBm"
+    else:
+        rssi_str = "Not seen"
+        raw_mrt_str = "N/A"
+        filt_mrt_str = "N/A"
 
-        # Calculate DMRT for this cup ONLY if BOTH sensing and reference tags were read within the last 5s
-        dmrt_str = "N/A"
-        if s_active and r_active:
-            dmrt_val = MRTCalculator.calculate_dmrt(
-                scanned_tags[sensing_epc]["filtered_mrt"],
-                scanned_tags[reference_epc]["filtered_mrt"]
-            )
-            dmrt_str = f"{dmrt_val:+.2f} dB"
+    print(f"| {SETUP_LABEL:<15} | {'Sensor':<10} | {SENSING_EPC:<24} | {rssi_str:<9} | {raw_mrt_str:<11} | {filt_mrt_str:<14} | {dmrt_str:<10} |")
 
-        # Sensing Tag Row
-        if s_active:
-            info = scanned_tags[sensing_epc]
-            rssi_str = f"-{info['rssi']} dBm"
-            raw_mrt_str = f"{info['raw_mrt']:.1f} dBm"
-            filt_mrt_str = f"{info['filtered_mrt']:.2f} dBm"
-        else:
-            rssi_str = "Not seen"
-            raw_mrt_str = "N/A"
-            filt_mrt_str = "N/A"
+    # Reference Tag Row
+    if r_active:
+        info = scanned_tags[REFERENCE_EPC]
+        rssi_str = f"-{info['rssi']} dBm"
+        raw_mrt_str = f"{info['raw_mrt']:.1f} dBm"
+        filt_mrt_str = f"{info['filtered_mrt']:.2f} dBm"
+    else:
+        rssi_str = "Not seen"
+        raw_mrt_str = "N/A"
+        filt_mrt_str = "N/A"
 
-        print(f"| {cup_name:<15} | {'Sensor':<10} | {sensing_epc:<24} | {rssi_str:<9} | {raw_mrt_str:<11} | {filt_mrt_str:<14} | {dmrt_str:<10} |")
+    print(f"| {'':<15} | {'Referência':<10} | {REFERENCE_EPC:<24} | {rssi_str:<9} | {raw_mrt_str:<11} | {filt_mrt_str:<14} | {'':<10} |")
+    print(divider)
 
-        # Reference Tag Row
-        if r_active:
-            info = scanned_tags[reference_epc]
-            rssi_str = f"-{info['rssi']} dBm"
-            raw_mrt_str = f"{info['raw_mrt']:.1f} dBm"
-            filt_mrt_str = f"{info['filtered_mrt']:.2f} dBm"
-        else:
-            rssi_str = "Not seen"
-            raw_mrt_str = "N/A"
-            filt_mrt_str = "N/A"
-
-        print(f"| {'':<15} | {'Reference':<10} | {reference_epc:<24} | {rssi_str:<9} | {raw_mrt_str:<11} | {filt_mrt_str:<14} | {'':<10} |")
-        print(divider)
-
-    # Print unassigned / extra tags detected in the environment
-    other_epcs = [epc for epc in scanned_tags if epc.upper() not in assigned_epcs]
+    # Display extra / unassigned tags if detected
+    other_epcs = [epc for epc in scanned_tags if epc not in (SENSING_EPC, REFERENCE_EPC)]
     if other_epcs:
         for idx, epc in enumerate(other_epcs):
-            group_label = "Unassigned" if idx == 0 and not cups_config else ("Other Tags" if idx == 0 else "")
+            label = "Outras Tags" if idx == 0 else ""
             if is_tag_active(epc, current_time):
                 info = scanned_tags[epc]
                 rssi_str = f"-{info['rssi']} dBm"
@@ -149,59 +110,52 @@ def print_table(second_counter: int, current_time: float, cups_config: dict):
                 rssi_str = "Not seen"
                 raw_mrt_str = "N/A"
                 filt_mrt_str = "N/A"
-            print(f"| {group_label:<15} | {'General':<10} | {epc:<24} | {rssi_str:<9} | {raw_mrt_str:<11} | {filt_mrt_str:<14} | {'N/A':<10} |")
+            print(f"| {label:<15} | {'Extra':<10} | {epc:<24} | {rssi_str:<9} | {raw_mrt_str:<11} | {filt_mrt_str:<14} | {'N/A':<10} |")
         print(divider)
 
 
 def main():
     print("=" * 114)
-    print("      IN-R200 UHF RFID Reader - Dynamic Periodic Real-Time MRT & DMRT Monitor")
+    print("      IN-R200 UHF RFID Reader - Experimento 3 (Solo com 100g de Água - 20 cm)")
     print("=" * 114)
+    print(f"📌 Tag Sensoriamento : {SENSING_EPC}")
+    print(f"📌 Tag Referência    : {REFERENCE_EPC}")
+    print(f"⚡ Faixa de Potência  : 15.0 dBm a 32.0 dBm (Especificação do leitor + Ganho Antena)")
+    print(f"🎯 Meta de Leituras  : {TARGET_READINGS} varreduras (aprox. 15 minutos reais de execução)")
 
-    # Load cup configuration dynamically from anotacoes.md
-    cups_config = load_cups_config("anotacoes.md")
-    if cups_config:
-        print(f"📋 Loaded {len(cups_config)} cup configuration(s) from anotacoes.md:")
-        for cup, cfg in cups_config.items():
-            print(f"   - {cup}: Sensor={cfg['sensing']} | Reference={cfg['reference']}")
-    else:
-        print("ℹ️ No cup configuration found in anotacoes.md. Monitoring all detected tags in general mode.")
-
-    # 1. Instantiate reader driver targeting Linux USB serial port at 115200 baud
+    # 1. Connect to reader on USB serial port
     reader = INR200Reader(port="/dev/ttyUSB0", baudrate=115200)
-    
-    # 2. Open serial connection and verify communication
     if not reader.connect():
-        print("❌ Could not connect to reader on /dev/ttyUSB0.")
-        print("👉 Ensure /dev/ttyUSB0 permissions are granted: sudo chmod 666 /dev/ttyUSB0")
+        print("❌ Não foi possível conectar ao leitor em /dev/ttyUSB0.")
+        print("👉 Verifique permissões: sudo chmod 666 /dev/ttyUSB0")
         sys.exit(1)
-        
-    # 3. Instantiate MRT Calculator
+
+    # 2. Instantiate MRT Calculator (power range: 15.0 a 32.0 dBm, 1.0 dBm step)
     mrt_calc = MRTCalculator(
         reader=reader,
-        min_power=10.0,
-        max_power=26.0,
+        min_power=15.0,
+        max_power=32.0,
         power_step=1.0,
         dwell_time=0.04
     )
 
-    # 4. Instantiate DMRT Exporter for logging and graphic generation
+    # 3. Instantiate Data Exporter
     exporter = DMRTExporter()
-    
-    print("\n📡 Periodic MRT Scanner active. Displaying DMRT results every second...")
-    print("   (Press Ctrl+C to stop scanning and view final summary/graphic chart)\n")
-    
-    second_counter = 0
+
+    print("\n📡 Iniciando varreduras de MRT...")
+    print("   (Você pode interromper a qualquer momento com Ctrl+C para gerar os gráficos parciais/finais)\n")
+
+    reading_counter = 0
 
     try:
-        while True:
+        while reading_counter < TARGET_READINGS:
             start_time = time.time()
-            second_counter += 1
+            reading_counter += 1
 
-            # Execute MRT power sweep for current 1-second window
+            # Run 1 power sweep iteration
             scan_results = mrt_calc.linear_sweep_details(verbose=False)
 
-            # Process and aggregate detected tag data
+            # Update tag data
             for epc, info in scan_results.items():
                 raw_mrt = info["mrt"]
                 filtered_mrt = mrt_calc.apply_low_pass_filter(epc, raw_mrt)
@@ -225,44 +179,63 @@ def main():
                     scanned_tags[epc]["filtered_mrt"] = filtered_mrt
                     scanned_tags[epc]["last_seen"] = now
 
-            # Collect DMRT readings for exporter for this second
             current_time = time.time()
-            dmrt_by_cup = {}
-            for cup_name, tags in cups_config.items():
-                s_epc = tags["sensing"].upper()
-                r_epc = tags["reference"].upper()
-                if is_tag_active(s_epc, current_time) and is_tag_active(r_epc, current_time):
-                    dmrt_by_cup[cup_name] = MRTCalculator.calculate_dmrt(
-                        scanned_tags[s_epc]["filtered_mrt"],
-                        scanned_tags[r_epc]["filtered_mrt"]
-                    )
-                else:
-                    dmrt_by_cup[cup_name] = None
+            s_active = is_tag_active(SENSING_EPC, current_time)
+            r_active = is_tag_active(REFERENCE_EPC, current_time)
 
-            exporter.record_second(second_counter, dmrt_by_cup)
+            s_data = scanned_tags.get(SENSING_EPC) if s_active else None
+            r_data = scanned_tags.get(REFERENCE_EPC) if r_active else None
 
-            # Print tabular format with DMRT for each second
-            print_table(second_counter, current_time, cups_config)
+            dmrt_val = None
+            if s_data and r_data:
+                dmrt_val = MRTCalculator.calculate_dmrt(
+                    s_data["filtered_mrt"],
+                    r_data["filtered_mrt"]
+                )
 
-            # Sleep remaining time of the 1-second interval
-            elapsed = time.time() - start_time
-            time.sleep(max(0.0, 1.0 - elapsed))
+            # Record metrics for exporter
+            exporter.record_second_full(
+                second=reading_counter,
+                sensing_raw_mrt=s_data["raw_mrt"] if s_data else None,
+                sensing_filt_mrt=s_data["filtered_mrt"] if s_data else None,
+                sensing_rssi=s_data["rssi"] if s_data else None,
+                ref_raw_mrt=r_data["raw_mrt"] if r_data else None,
+                ref_filt_mrt=r_data["filtered_mrt"] if r_data else None,
+                ref_rssi=r_data["rssi"] if r_data else None,
+                dmrt=dmrt_val
+            )
+
+            # Render real-time console table
+            print_table(reading_counter, current_time)
 
     except KeyboardInterrupt:
-        print("\n\nStopping periodic MRT inventory scan...")
+        print("\n\n⏹️ Teste interrompido pelo usuário.")
     finally:
-        # Restore reader RF power to default 26.0 dBm and close serial port
+        # Restore power and close reader
         reader.set_rf_power(26.0)
         reader.close()
-        # Export graphic chart and CSV report at end of detection
-        exporter.export_chart("dmrt_results.png", "dmrt_results.csv")
 
-    # Print final summary table
+        # Export chart and CSV in experimento_3 directory
+        os.makedirs("experimento_3", exist_ok=True)
+        chart_path = "experimento_3/solo_100g_agua_grafico.png"
+        csv_path = "experimento_3/solo_100g_agua_resultados.csv"
+        
+        print("\n📊 Gerando gráficos e exportando dados do Solo com 100g de Água...")
+        exporter.export_experiment_chart(
+            chart_filename=chart_path,
+            csv_filename=csv_path,
+            title_prefix="Experimento 3 - Solo com 100g de Água (20 cm)"
+        )
+
+    # Print final report table
     print("\n" + "=" * 114)
-    print("                     FINAL PERIODIC MRT & DMRT REPORT")
+    print("                     RELATÓRIO FINAL: SOLO COM 100G DE ÁGUA")
     print("=" * 114)
-    print_table(second_counter, time.time(), cups_config)
+    print_table(reading_counter, time.time())
+    print(f"\n✅ Arquivo CSV salvo em: {os.path.abspath(csv_path)}")
+    print(f"✅ Gráfico PNG salvo em: {os.path.abspath(chart_path)}")
 
 
 if __name__ == "__main__":
     main()
+

@@ -19,8 +19,8 @@ class MRTCalculator:
     def __init__(
         self,
         reader: INR200Reader,
-        min_power: float = 10.0,
-        max_power: float = 26.0,
+        min_power: float = 15.0,
+        max_power: float = 32.0,
         power_step: float = 0.5,
         dwell_time: float = 0.4
     ):

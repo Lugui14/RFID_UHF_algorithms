@@ -2,7 +2,7 @@
 
 ## 1. Visão Geral
 
-Este documento registra a configuração, mapeamento de tags EPC e parâmetros do **Experimento 1** para medição do Limiar Mínimo de Resposta Diferencial (DMRT) utilizando o leitor **IN-R200 (MagicRF M100)** e a metodologia do artigo *GreenTag* (ACM TOSN 2025).
+Este documento registra a configuração, mapeamento de tags EPC e parâmetros do **Experimento 1** para medição do Limiar Mínimo de Resposta Diferencial (DMRT) utilizando o leitor **IN-R200 (MagicRF M100)** e a metodologia do artigo _GreenTag_ (ACM TOSN 2025).
 
 ---
 
@@ -11,10 +11,12 @@ Este documento registra a configuração, mapeamento de tags EPC e parâmetros d
 Convenção: `DMRT = Filtered_MRT(Sensoriamento) - Filtered_MRT(Referência)`
 
 ### 2.1. Copo Direita
+
 - **Tag de Sensoriamento (Inferior):** `E2806995000040136FD09975`
 - **Tag de Referência (Superior):** `E2806995000050136FD09175`
 
 ### 2.2. Copo Esquerda
+
 - **Tag de Sensoriamento (Inferior):** `E2806995000040136FD09575`
 - **Tag de Referência (Superior):** `E2806995000040136FD08D75`
 
@@ -43,3 +45,14 @@ copo esquerda: E2806995000040136FD09575 - E2806995000040136FD08D75
    python main.py
    ```
 4. Ao finalizar a coleta (pressionando `Ctrl+C`), o gráfico `dmrt_results.png` e os dados brutos `dmrt_results.csv` serão gerados automaticamente.
+
+## 5. Setup do primeiro experimento
+
+O setup do primeiro experimento foi realizado da seguinte forma:
+
+1. primeiro foram posicionados dois copos plasticos próximos ao leitor e a antena (35 cm de distância).
+2. os dois copos possuiam duas tags posicionadas verticalmente um sobre o outro na parte externa do copo (tag de referência superior e tag de sensoriamento inferior)
+3. primeiro, foi preenchido o copo da direita com água até cerca de metade, e coletado os dados por cerca de 4 minutos
+4. após cerca de 4 minutos o copo da direita foi esvaziado e o copo da esquerda foi preenchido com água até cerca de metade, e os dados foram coletados por cerca de 4 minutos
+5. os resultados de DMRT coletados foram exportados nos arquivos de CSV e no Grafico feito com a biblioteca matplotlib
+6. a tag de sensoriamento do copo com água não era detectada pelo leitor em nenhum momento em que a água estava no copo, ja a tag de referência continuava sendo lida normalmente

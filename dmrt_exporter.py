@@ -41,6 +41,127 @@ class DMRTExporter:
 
         self.records.append(entry)
 
+    def record_second_full(
+        self,
+        second: int,
+        sensing_raw_mrt: Optional[float] = None,
+        sensing_filt_mrt: Optional[float] = None,
+        sensing_rssi: Optional[float] = None,
+        ref_raw_mrt: Optional[float] = None,
+        ref_filt_mrt: Optional[float] = None,
+        ref_rssi: Optional[float] = None,
+        dmrt: Optional[float] = None
+    ):
+        """
+        Logs complete second-by-second experiment metrics (MRT raw/filt, RSSI, DMRT) for Sensing and Reference tags.
+        """
+        entry = {
+            "second": second,
+            "elapsed_seconds": round(time.time() - self.start_time, 2),
+            "sensing_raw_mrt": round(sensing_raw_mrt, 2) if sensing_raw_mrt is not None else None,
+            "sensing_filt_mrt": round(sensing_filt_mrt, 2) if sensing_filt_mrt is not None else None,
+            "sensing_rssi": round(sensing_rssi, 1) if sensing_rssi is not None else None,
+            "ref_raw_mrt": round(ref_raw_mrt, 2) if ref_raw_mrt is not None else None,
+            "ref_filt_mrt": round(ref_filt_mrt, 2) if ref_filt_mrt is not None else None,
+            "ref_rssi": round(ref_rssi, 1) if ref_rssi is not None else None,
+            "dmrt": round(dmrt, 2) if dmrt is not None else None
+        }
+        self.records.append(entry)
+
+
+    def export_experiment_chart(
+        self,
+        chart_filename: str = "experimento_2/vaso_vazio_grafico.png",
+        csv_filename: str = "experimento_2/vaso_vazio_resultados.csv",
+        title_prefix: str = "Experimento 2 - Vaso de Planta Vazio (45 cm)"
+    ) -> Optional[str]:
+        """
+        Generates and saves a 3-panel graphical chart showing MRT, DMRT, and RSSI over time.
+        """
+        self.export_csv(csv_filename)
+
+        if not self.records:
+            print("⚠️ No experiment records available to generate graphic chart.")
+            return None
+
+        # Ensure target directory exists
+        os.makedirs(os.path.dirname(os.path.abspath(chart_filename)), exist_ok=True)
+        filepath = os.path.abspath(chart_filename)
+
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+
+            seconds = [rec["second"] for rec in self.records]
+
+            # Filter valid records
+            sec_s_raw = [r["second"] for r in self.records if r.get("sensing_raw_mrt") is not None]
+            s_raw = [r["sensing_raw_mrt"] for r in self.records if r.get("sensing_raw_mrt") is not None]
+
+            sec_s_filt = [r["second"] for r in self.records if r.get("sensing_filt_mrt") is not None]
+            s_filt = [r["sensing_filt_mrt"] for r in self.records if r.get("sensing_filt_mrt") is not None]
+
+            sec_r_raw = [r["second"] for r in self.records if r.get("ref_raw_mrt") is not None]
+            r_raw = [r["ref_raw_mrt"] for r in self.records if r.get("ref_raw_mrt") is not None]
+
+            sec_r_filt = [r["second"] for r in self.records if r.get("ref_filt_mrt") is not None]
+            r_filt = [r["ref_filt_mrt"] for r in self.records if r.get("ref_filt_mrt") is not None]
+
+            sec_dmrt = [r["second"] for r in self.records if r.get("dmrt") is not None]
+            val_dmrt = [r["dmrt"] for r in self.records if r.get("dmrt") is not None]
+
+            sec_s_rssi = [r["second"] for r in self.records if r.get("sensing_rssi") is not None]
+            s_rssi = [r["sensing_rssi"] for r in self.records if r.get("sensing_rssi") is not None]
+
+            sec_r_rssi = [r["second"] for r in self.records if r.get("ref_rssi") is not None]
+            r_rssi = [r["ref_rssi"] for r in self.records if r.get("ref_rssi") is not None]
+
+            fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(11, 9), sharex=True, dpi=150)
+
+            # Panel 1: MRT (Bruto vs Filtrado)
+            if sec_s_raw:
+                ax1.plot(sec_s_raw, s_raw, color="#9ecae1", linestyle="--", linewidth=1, label="Sensoriamento (Bruto)")
+            if sec_s_filt:
+                ax1.plot(sec_s_filt, s_filt, color="#1f77b4", linestyle="-", linewidth=2, label="Sensoriamento (Filtrado)")
+            if sec_r_raw:
+                ax1.plot(sec_r_raw, r_raw, color="#fdd0a2", linestyle="--", linewidth=1, label="Referência (Bruto)")
+            if sec_r_filt:
+                ax1.plot(sec_r_filt, r_filt, color="#ff7f0e", linestyle="-", linewidth=2, label="Referência (Filtrado)")
+
+            ax1.set_title(f"{title_prefix} - Evolução de MRT, DMRT e RSSI", fontsize=13, fontweight="bold", pad=10)
+            ax1.set_ylabel("MRT (dBm)", fontsize=11)
+            ax1.grid(True, linestyle="--", alpha=0.5)
+            ax1.legend(loc="upper right", fontsize=9, frameon=True)
+
+            # Panel 2: DMRT
+            if sec_dmrt:
+                ax2.plot(sec_dmrt, val_dmrt, color="#2ca02c", linestyle="-", linewidth=2, label="DMRT (Sensoriamento - Referência)")
+            ax2.set_ylabel("DMRT (dB)", fontsize=11)
+            ax2.grid(True, linestyle="--", alpha=0.5)
+            ax2.legend(loc="upper right", fontsize=9, frameon=True)
+
+            # Panel 3: RSSI
+            if sec_s_rssi:
+                ax3.plot(sec_s_rssi, s_rssi, color="#1f77b4", linestyle="-", linewidth=1.5, label="Sensoriamento RSSI (-dBm)")
+            if sec_r_rssi:
+                ax3.plot(sec_r_rssi, r_rssi, color="#ff7f0e", linestyle="-", linewidth=1.5, label="Referência RSSI (-dBm)")
+            ax3.set_xlabel("Tempo (Segundos)", fontsize=11)
+            ax3.set_ylabel("RSSI (-dBm)", fontsize=11)
+            ax3.grid(True, linestyle="--", alpha=0.5)
+            ax3.legend(loc="upper right", fontsize=9, frameon=True)
+
+            plt.tight_layout()
+            plt.savefig(filepath, format="png", bbox_inches="tight")
+            plt.close()
+
+            print(f"📈 Gráfico do experimento exportado com sucesso: {filepath}")
+            return filepath
+
+        except Exception as e:
+            print(f"⚠️ Erro ao gerar gráfico com Matplotlib: {e}")
+            return None
+
     def export_csv(self, filename: str = "dmrt_results.csv") -> str:
         """
         Exports recorded DMRT data to a CSV file.
@@ -49,9 +170,11 @@ class DMRTExporter:
             print("⚠️ No DMRT records available to export to CSV.")
             return ""
 
-        cup_names = sorted(list({k for rec in self.records for k in rec.keys() if k not in ("second", "elapsed_seconds")}))
-        fieldnames = ["second", "elapsed_seconds"] + cup_names
+        # Determine all fieldnames dynamically
+        all_keys = list(dict.fromkeys(k for rec in self.records for k in rec.keys()))
+        fieldnames = ["second", "elapsed_seconds"] + [k for k in all_keys if k not in ("second", "elapsed_seconds")]
 
+        os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)
         filepath = os.path.abspath(filename)
         with open(filepath, mode="w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -66,6 +189,9 @@ class DMRTExporter:
         """
         Generates and saves a graphical line chart showing DMRT results over time for each cup.
         """
+        if any("sensing_filt_mrt" in rec for rec in self.records):
+            return self.export_experiment_chart(chart_filename, csv_filename)
+
         self.export_csv(csv_filename)
 
         if not self.records:
@@ -190,3 +316,4 @@ class DMRTExporter:
 
         print(f"📈 DMRT graphic chart saved (SVG): {filepath}")
         return filepath
+
