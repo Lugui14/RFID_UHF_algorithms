@@ -1,16 +1,18 @@
 """
 ===================================================================================
- Experimento 3 - Passo 2: Solo com Adição de 100g de Água (20 cm)
+ Experimento 4 - Passo 5: Solo com 90g de Água - Antena 20 cm Acima do Vaso
 ===================================================================================
  Descrição:
- - Medição de MRT, DMRT e RSSI ao longo do tempo (alvo: 260 varreduras / ~15 min reais).
- - Tag Sensoriamento : E2806995000050136FD09D75
- - Tag Referência    : E2806995000050136FD0A175
- - Solo              : Turfa fibrosa + 100g de água adicionada
+ - Medição de MRT, DMRT e RSSI ao longo do tempo (alvo: 200 varreduras).
+ - Tag Sensoriamento : E2806995000040136FD0A575
+ - Tag Referência    : E2806995000040136FD0A975
+ - Solo              : Turfa fibrosa + 90g de água adicionada (30g + 30g + 30g)
+ - Posição da antena : Posicionada 20 cm acima do vaso (visada superior)
  - Alcance MRT       : 15.0 dBm a 32.0 dBm (Especificação do leitor + ganho de 6 dBi da antena)
- - Distância da antena: ~20 cm
+ - Distância da antena: ~20 cm acima do vaso
  - Ao encerrar, exporta o gráfico de 3 painéis (MRT, DMRT, RSSI) e o relatório CSV
-   em experimento_3/solo_100g_agua_grafico.png e experimento_3/solo_100g_agua_resultados.csv.
+   em experimento_4/solo_90g_agua_antena_acima_grafico.png e
+      experimento_4/solo_90g_agua_antena_acima_resultados.csv.
 ===================================================================================
 """
 
@@ -22,13 +24,13 @@ from in_r200_driver import INR200Reader
 from mrt_calculator import MRTCalculator
 from dmrt_exporter import DMRTExporter
 
-# Quantidade alvo de leituras/varreduras (260 varreduras equivalem a ~15 minutos reais)
-TARGET_READINGS = 260
+# Quantidade alvo de leituras/varreduras
+TARGET_READINGS = 200
 
-# Tag configuration for Experimento 3
-SENSING_EPC = "E2806995000050136FD09D75"
-REFERENCE_EPC = "E2806995000050136FD0A175"
-SETUP_LABEL = "Solo 100g Água"
+# Tag configuration for Experimento 4
+SENSING_EPC = "E2806995000040136FD0A575"
+REFERENCE_EPC = "E2806995000040136FD0A975"
+SETUP_LABEL = "Solo 90g Acima"
 
 TAG_TIMEOUT = 10.0
 
@@ -45,10 +47,10 @@ def is_tag_active(epc: str, current_time: float) -> bool:
 
 def print_table(reading_counter: int, current_time: float):
     """
-    Prints a formatted table displaying real-time MRT, DMRT and RSSI for Experimento 3.
+    Prints a formatted table displaying real-time MRT, DMRT and RSSI for Experimento 4.
     """
     pct = (reading_counter / TARGET_READINGS) * 100.0
-    header = f" EXPERIMENTO 3 - SOLO + 100G ÁGUA (20 CM) | Varredura {reading_counter:04d}/{TARGET_READINGS:04d} ({pct:.1f}% concluído)"
+    header = f" EXPERIMENTO 4 - SOLO + 90G ÁGUA (ANTENA 20 CM ACIMA) | Varredura {reading_counter:04d}/{TARGET_READINGS:04d} ({pct:.1f}% concluído)"
     divider = "+" + "-" * 17 + "+" + "-" * 12 + "+" + "-" * 26 + "+" + "-" * 11 + "+" + "-" * 13 + "+" + "-" * 16 + "+" + "-" * 12 + "+"
 
     print("\n" + "=" * 114)
@@ -116,12 +118,12 @@ def print_table(reading_counter: int, current_time: float):
 
 def main():
     print("=" * 114)
-    print("      IN-R200 UHF RFID Reader - Experimento 3 (Solo com 100g de Água - 20 cm)")
+    print("      IN-R200 UHF RFID Reader - Experimento 4 (Solo com 90g de Água - Antena 20 cm Acima)")
     print("=" * 114)
     print(f"📌 Tag Sensoriamento : {SENSING_EPC}")
     print(f"📌 Tag Referência    : {REFERENCE_EPC}")
     print(f"⚡ Faixa de Potência  : 15.0 dBm a 32.0 dBm (Especificação do leitor + Ganho Antena)")
-    print(f"🎯 Meta de Leituras  : {TARGET_READINGS} varreduras (aprox. 15 minutos reais de execução)")
+    print(f"🎯 Meta de Leituras  : {TARGET_READINGS} varreduras")
 
     # 1. Connect to reader on USB serial port
     reader = INR200Reader(port="/dev/ttyUSB0", baudrate=115200)
@@ -215,21 +217,21 @@ def main():
         reader.set_rf_power(26.0)
         reader.close()
 
-        # Export chart and CSV in experimento_3 directory
-        os.makedirs("experimento_3", exist_ok=True)
-        chart_path = "experimento_3/solo_100g_agua_grafico.png"
-        csv_path = "experimento_3/solo_100g_agua_resultados.csv"
+        # Export chart and CSV in experimento_4 directory
+        os.makedirs("experimento_4", exist_ok=True)
+        chart_path = "experimento_4/solo_90g_agua_antena_acima_grafico.png"
+        csv_path = "experimento_4/solo_90g_agua_antena_acima_resultados.csv"
         
-        print("\n📊 Gerando gráficos e exportando dados do Solo com 100g de Água...")
+        print("\n📊 Gerando gráficos e exportando dados do Solo com 90g de Água (Antena 20 cm Acima)...")
         exporter.export_experiment_chart(
             chart_filename=chart_path,
             csv_filename=csv_path,
-            title_prefix="Experimento 3 - Solo com 100g de Água (20 cm)"
+            title_prefix="Experimento 4 - Solo com 90g de Água - Antena 20 cm Acima"
         )
 
     # Print final report table
     print("\n" + "=" * 114)
-    print("                     RELATÓRIO FINAL: SOLO COM 100G DE ÁGUA")
+    print("             RELATÓRIO FINAL: SOLO COM 90G DE ÁGUA (ANTENA 20 CM ACIMA)")
     print("=" * 114)
     print_table(reading_counter, time.time())
     print(f"\n✅ Arquivo CSV salvo em: {os.path.abspath(csv_path)}")
