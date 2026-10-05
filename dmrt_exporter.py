@@ -50,7 +50,8 @@ class DMRTExporter:
         ref_raw_mrt: Optional[float] = None,
         ref_filt_mrt: Optional[float] = None,
         ref_rssi: Optional[float] = None,
-        dmrt: Optional[float] = None
+        dmrt: Optional[float] = None,
+        moisture_pct: Optional[float] = None
     ):
         """
         Logs complete second-by-second experiment metrics (MRT raw/filt, RSSI, DMRT) for Sensing and Reference tags.
@@ -58,6 +59,7 @@ class DMRTExporter:
         entry = {
             "second": second,
             "elapsed_seconds": round(time.time() - self.start_time, 2),
+            "moisture_pct": moisture_pct,
             "sensing_raw_mrt": round(sensing_raw_mrt, 2) if sensing_raw_mrt is not None else None,
             "sensing_filt_mrt": round(sensing_filt_mrt, 2) if sensing_filt_mrt is not None else None,
             "sensing_rssi": round(sensing_rssi, 1) if sensing_rssi is not None else None,
@@ -76,7 +78,8 @@ class DMRTExporter:
         title_prefix: str = "Experimento 2 - Vaso de Planta Vazio (45 cm)"
     ) -> Optional[str]:
         """
-        Generates and saves a 3-panel graphical chart showing MRT, DMRT, and RSSI over time.
+        Generates and saves a graphical chart showing MRT, DMRT (if available), and RSSI over readings.
+        Automatically uses 2 panels if only 1 tag is active, or 3 panels if DMRT is present.
         """
         self.export_csv(csv_filename)
 
@@ -92,8 +95,6 @@ class DMRTExporter:
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
-
-            seconds = [rec["second"] for rec in self.records]
 
             # Filter valid records
             sec_s_raw = [r["second"] for r in self.records if r.get("sensing_raw_mrt") is not None]
@@ -117,37 +118,50 @@ class DMRTExporter:
             sec_r_rssi = [r["second"] for r in self.records if r.get("ref_rssi") is not None]
             r_rssi = [r["ref_rssi"] for r in self.records if r.get("ref_rssi") is not None]
 
-            fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(11, 9), sharex=True, dpi=150)
+            has_dmrt = len(sec_dmrt) > 0 and any(v is not None for v in val_dmrt)
+
+            if has_dmrt:
+                fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(11, 9), sharex=True, dpi=150)
+            else:
+                fig, (ax1, ax3) = plt.subplots(2, 1, figsize=(11, 7), sharex=True, dpi=150)
 
             # Panel 1: MRT (Bruto vs Filtrado)
             if sec_s_raw:
                 ax1.plot(sec_s_raw, s_raw, color="#9ecae1", linestyle="--", linewidth=1, label="Sensoriamento (Bruto)")
             if sec_s_filt:
                 ax1.plot(sec_s_filt, s_filt, color="#1f77b4", linestyle="-", linewidth=2, label="Sensoriamento (Filtrado)")
+                mean_mrt = sum(s_filt) / len(s_filt)
+                ax1.axhline(mean_mrt, color="#08519c", linestyle=":", linewidth=1.5, label=f"MRT Médio ({mean_mrt:.2f} dBm)")
             if sec_r_raw:
                 ax1.plot(sec_r_raw, r_raw, color="#fdd0a2", linestyle="--", linewidth=1, label="Referência (Bruto)")
             if sec_r_filt:
                 ax1.plot(sec_r_filt, r_filt, color="#ff7f0e", linestyle="-", linewidth=2, label="Referência (Filtrado)")
 
-            ax1.set_title(f"{title_prefix} - Evolução de MRT, DMRT e RSSI", fontsize=13, fontweight="bold", pad=10)
+            ax1.set_title(f"{title_prefix} - Evolução de MRT e RSSI", fontsize=13, fontweight="bold", pad=10)
             ax1.set_ylabel("MRT (dBm)", fontsize=11)
             ax1.grid(True, linestyle="--", alpha=0.5)
             ax1.legend(loc="upper right", fontsize=9, frameon=True)
 
-            # Panel 2: DMRT
-            if sec_dmrt:
+            # Panel 2: DMRT (apenas se disponível)
+            if has_dmrt:
                 ax2.plot(sec_dmrt, val_dmrt, color="#2ca02c", linestyle="-", linewidth=2, label="DMRT (Sensoriamento - Referência)")
-            ax2.set_ylabel("DMRT (dB)", fontsize=11)
-            ax2.grid(True, linestyle="--", alpha=0.5)
-            ax2.legend(loc="upper right", fontsize=9, frameon=True)
+                ax2.set_ylabel("DMRT (dB)", fontsize=11)
+                ax2.grid(True, linestyle="--", alpha=0.5)
+                ax2.legend(loc="upper right", fontsize=9, frameon=True)
 
             # Panel 3: RSSI
             if sec_s_rssi:
-                ax3.plot(sec_s_rssi, s_rssi, color="#1f77b4", linestyle="-", linewidth=1.5, label="Sensoriamento RSSI (-dBm)")
+                mean_rssi = sum(s_rssi) / len(s_rssi)
+                label_rssi = f"Sensoriamento RSSI (Médio: {mean_rssi:.1f} dBm)" if mean_rssi < 0 else f"Sensoriamento RSSI (Médio: -{mean_rssi:.1f} dBm)"
+                ax3.plot(sec_s_rssi, s_rssi, color="#1f77b4", linestyle="-", linewidth=1.5, label="Sensoriamento RSSI (dBm)")
+                ax3.axhline(mean_rssi, color="#08519c", linestyle=":", linewidth=1.5, label=label_rssi)
             if sec_r_rssi:
-                ax3.plot(sec_r_rssi, r_rssi, color="#ff7f0e", linestyle="-", linewidth=1.5, label="Referência RSSI (-dBm)")
-            ax3.set_xlabel("Tempo (Segundos)", fontsize=11)
-            ax3.set_ylabel("RSSI (-dBm)", fontsize=11)
+                mean_ref_rssi = sum(r_rssi) / len(r_rssi)
+                label_ref = f"Referência RSSI (Médio: {mean_ref_rssi:.1f} dBm)" if mean_ref_rssi < 0 else f"Referência RSSI (Médio: -{mean_ref_rssi:.1f} dBm)"
+                ax3.plot(sec_r_rssi, r_rssi, color="#ff7f0e", linestyle="-", linewidth=1.5, label="Referência RSSI (dBm)")
+                ax3.axhline(mean_ref_rssi, color="#e6550d", linestyle=":", linewidth=1.5, label=label_ref)
+            ax3.set_xlabel("Varredura / Amostra (#)", fontsize=11)
+            ax3.set_ylabel("RSSI (dBm)", fontsize=11)
             ax3.grid(True, linestyle="--", alpha=0.5)
             ax3.legend(loc="upper right", fontsize=9, frameon=True)
 

@@ -1,0 +1,90 @@
+{
+  "tags": {
+    "E2806995000040136FD09975": {
+      "nome": "Copo Direita - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "Experimento 1 - Copos Plásticos",
+      "data_cadastro": "2026-09-22"
+    },
+    "E2806995000050136FD09175": {
+      "nome": "Copo Direita - Referência",
+      "funcao": "referencia",
+      "setup": "Experimento 1 - Copos Plásticos",
+      "data_cadastro": "2026-09-22"
+    },
+    "E2806995000040136FD09575": {
+      "nome": "Copo Esquerda - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "Experimento 1 - Copos Plásticos",
+      "data_cadastro": "2026-09-22"
+    },
+    "E2806995000040136FD08D75": {
+      "nome": "Copo Esquerda - Referência",
+      "funcao": "referencia",
+      "setup": "Experimento 1 - Copos Plásticos",
+      "data_cadastro": "2026-09-22"
+    },
+    "E2806995000050136FD09D75": {
+      "nome": "Vaso Turfa - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "Experimento 3 e 5",
+      "data_cadastro": "2026-09-22"
+    },
+    "E2806995000050136FD0A175": {
+      "nome": "Vaso Turfa - Referência",
+      "funcao": "referencia",
+      "setup": "Experimento 3 e 5",
+      "data_cadastro": "2026-09-22"
+    },
+    "E2806995000040136FD0A575": {
+      "nome": "Vaso Turfa 20cm - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "Experimento 4",
+      "data_cadastro": "2026-09-22"
+    },
+    "E2806995000040136FD0A975": {
+      "nome": "Vaso Turfa 20cm - Referência",
+      "funcao": "referencia",
+      "setup": "Experimento 4",
+      "data_cadastro": "2026-09-22"
+    },
+    "E2806995000040136FD0B175": {
+      "nome": "Experimento 6",
+      "funcao": "sensoriamento",
+      "setup": "6",
+      "data_cadastro": "2026-09-22"
+    }
+  },
+  "pares": [
+    {
+      "experimento": "Experimento 1 - Copo Direita",
+      "sensoriamento": "E2806995000040136FD09975",
+      "referencia": "E2806995000050136FD09175",
+      "data_cadastro": "2026-09-22"
+    },
+    {
+      "experimento": "Experimento 1 - Copo Esquerda",
+      "sensoriamento": "E2806995000040136FD09575",
+      "referencia": "E2806995000040136FD08D75",
+      "data_cadastro": "2026-09-22"
+    },
+    {
+      "experimento": "Experimento 3 - Solo 100g Água (20cm)",
+      "sensoriamento": "E2806995000050136FD09D75",
+      "referencia": "E2806995000050136FD0A175",
+      "data_cadastro": "2026-09-22"
+    },
+    {
+      "experimento": "Experimento 4 - Solo em Vaso 20cm",
+      "sensoriamento": "E2806995000040136FD0A575",
+      "referencia": "E2806995000040136FD0A975",
+      "data_cadastro": "2026-09-22"
+    },
+    {
+      "experimento": "Experimento 5 - Solo em Vaso 60cm Acima",
+      "sensoriamento": "E2806995000050136FD09D75",
+      "referencia": "E2806995000050136FD0A175",
+      "data_cadastro": "2026-09-22"
+    }
+  ]
+}

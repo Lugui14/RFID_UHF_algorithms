@@ -7,7 +7,7 @@
 
 import time
 import sys
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from in_r200_driver import INR200Reader
 
 
@@ -20,21 +20,21 @@ class MRTCalculator:
         self,
         reader: INR200Reader,
         min_power: float = 15.0,
-        max_power: float = 32.0,
-        power_step: float = 0.5,
-        dwell_time: float = 0.4
+        max_power: float = 26.0,
+        power_step: float = 1.0,
+        dwell_time: float = 0.12
     ):
         """
         Parameters:
         - reader     : Connected INR200Reader instance
-        - min_power  : Minimum RF transmit power level in dBm to test
-        - max_power  : Maximum RF transmit power level in dBm to test
-        - power_step : Resolution step size in dBm (e.g. 0.5 dBm)
-        - dwell_time : Duration in seconds to scan at each power level
+        - min_power  : Minimum RF transmit power level in dBm to test (Hardware min: 15.0 dBm)
+        - max_power  : Maximum RF transmit power level in dBm to test (Hardware max: 26.0 dBm)
+        - power_step : Resolution step size in dBm (Default: 1.0 dBm - matches hardware DAC)
+        - dwell_time : Duration in seconds to scan at each power level (recommended >= 0.10s)
         """
         self.reader = reader
-        self.min_power = min_power
-        self.max_power = max_power
+        self.min_power = max(15.0, min_power)
+        self.max_power = min(26.0, max_power)
         self.power_step = power_step
         self.dwell_time = dwell_time
         
@@ -44,22 +44,43 @@ class MRTCalculator:
     def test_tag_read(self, power_dbm: float, target_epc: Optional[str] = None) -> Dict[str, dict]:
         """
         Sets reader power to power_dbm, scans for dwell_time seconds, and returns detected tags.
+        Uses synchronous multi-round inventory burst with continuous carrier for maximum
+        sensitivity at threshold power levels, guaranteed not to leak frames between levels.
         """
-        detected = {}
+        clamped_pwr = max(15.0, min(26.0, round(power_dbm, 1)))
+        self.reader.set_rf_power(clamped_pwr)
 
-        def _cb(epc: str, rssi: int, pc: str):
-            epc_clean = epc.upper()
-            if target_epc is None or epc_clean == target_epc.upper():
-                if epc_clean not in detected:
-                    detected[epc_clean] = {"rssi": rssi, "pc": pc, "count": 1}
-                else:
-                    detected[epc_clean]["count"] += 1
+        if hasattr(self.reader, "read_multi_tag"):
+            clean_target = target_epc.upper() if target_epc else None
+            return self.reader.read_multi_tag(
+                loop_count=3,
+                timeout=max(0.08, self.dwell_time),
+                target_epc=clean_target
+            )
+        elif hasattr(self.reader, "read_single_tag"):
+            clean_target = target_epc.upper() if target_epc else None
+            res = self.reader.read_single_tag(timeout=max(0.08, self.dwell_time))
+            if res:
+                epc, rssi, pc = res
+                epc_clean = epc.upper()
+                if clean_target is None or epc_clean == clean_target:
+                    return {epc_clean: {"rssi": rssi, "pc": pc, "count": 1}}
+            return {}
+        else:
+            # Fallback para mocks ou leitores genéricos
+            detected: Dict[str, dict] = {}
+            def _cb(epc: str, rssi: int, pc: str):
+                epc_clean = epc.upper()
+                if target_epc is None or epc_clean == target_epc.upper():
+                    if epc_clean not in detected:
+                        detected[epc_clean] = {"rssi": rssi, "pc": pc, "count": 1}
+                    else:
+                        detected[epc_clean]["count"] += 1
 
-        self.reader.set_rf_power(power_dbm)
-        self.reader.start_inventory(_cb)
-        time.sleep(self.dwell_time)
-        self.reader.stop_inventory()
-        return detected
+            self.reader.start_inventory(_cb)
+            time.sleep(self.dwell_time)
+            self.reader.stop_inventory()
+            return detected
 
     def linear_sweep_mrt(self, verbose: bool = True) -> Dict[str, float]:
         """
@@ -83,18 +104,29 @@ class MRTCalculator:
 
         return mrt_results
 
-    def linear_sweep_details(self, verbose: bool = False) -> Dict[str, dict]:
+    def linear_sweep_details(
+        self,
+        verbose: bool = False,
+        target_epcs: Optional[List[str]] = None,
+        early_stop: bool = False
+    ) -> Dict[str, dict]:
         """
         Sweeps reader transmit power from min_power to max_power.
         Returns a dict mapping EPC -> {mrt, rssi, pc, count} for all detected tags.
+        If early_stop is True and target_epcs is provided, breaks sweep as soon as all
+        target tags are found, dramatically accelerating sweep duration.
         """
         results: Dict[str, dict] = {}
         curr_power = self.min_power
         if verbose:
             print(f"\n🔍 Starting Linear Power Sweep ({self.min_power} dBm to {self.max_power} dBm, step {self.power_step} dBm)...")
 
+        clean_targets = [t.upper() for t in target_epcs] if target_epcs else []
+
         while curr_power <= self.max_power:
-            detected = self.test_tag_read(curr_power)
+            # Passa target_epc se estiver buscando apenas uma tag alvo para acelerar
+            first_target = clean_targets[0] if len(clean_targets) == 1 else None
+            detected = self.test_tag_read(curr_power, target_epc=first_target)
             for epc, info in detected.items():
                 if epc not in results:
                     results[epc] = {
@@ -104,9 +136,13 @@ class MRTCalculator:
                         "count": info["count"]
                     }
                     if verbose:
-                        print(f"  🎯 [MRT FOUND] EPC: {epc} -> MRT = {curr_power:.1f} dBm | RSSI: -{info['rssi']} dBm")
+                        rssi_fmt = f"{info['rssi']} dBm" if info['rssi'] < 0 else f"-{info['rssi']} dBm"
+                        print(f"  🎯 [MRT FOUND] EPC: {epc} -> MRT = {curr_power:.1f} dBm | RSSI: {rssi_fmt}")
                 else:
                     results[epc]["count"] += info["count"]
+
+            if early_stop and clean_targets and all(t in results for t in clean_targets):
+                break
 
             curr_power = round(curr_power + self.power_step, 2)
 

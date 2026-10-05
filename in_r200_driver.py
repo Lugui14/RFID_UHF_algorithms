@@ -21,7 +21,7 @@
 import time
 import threading
 import serial
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple, Dict
 
 
 def calc_checksum(hex_str: str) -> str:
@@ -73,6 +73,9 @@ class INR200Reader:
     Manages serial connection, configuration, tag inventory scanning, and data parsing.
     """
     
+    HARDWARE_MIN_POWER = 15.0  # Limite físico inferior do chip MagicRF M100
+    HARDWARE_MAX_POWER = 26.0  # Limite físico superior do chip MagicRF M100
+
     def __init__(self, port: str = "/dev/ttyUSB0", baudrate: int = 115200):
         """
         Initialize reader instance with port and baud rate.
@@ -84,6 +87,7 @@ class INR200Reader:
         self.ser: Optional[serial.Serial] = None
         self.is_reading = False
         self._read_thread: Optional[threading.Thread] = None
+        self._lock = threading.Lock()
 
     def connect(self) -> bool:
         """
@@ -115,48 +119,196 @@ class INR200Reader:
         Queries hardware/firmware string from reader (Cmd 0x03).
         Returns reader model string (e.g. 'M100 26dBm V1.0').
         """
-        if not self.ser or not self.ser.is_open:
-            return "Not Connected"
+        with self._lock:
+            if not self.ser or not self.ser.is_open:
+                return "Not Connected"
+                
+            pkt = build_frame("00", "03", "00")
+            self.ser.reset_input_buffer()
+            self.ser.write(pkt)
+            self.ser.flush()
+            time.sleep(0.05)
             
-        # Build frame: MsgType=00, Cmd=03, Data=00 (Hardware Version requested)
-        pkt = build_frame("00", "03", "00")
-        self.ser.write(pkt)
-        self.ser.flush()
-        time.sleep(0.1)
-        
-        # Read response packet
-        if self.ser.in_waiting > 0:
-            resp = self.ser.read(self.ser.in_waiting)
-            if len(resp) >= 7 and resp[0] == 0xAA and resp[-1] == 0xDD:
-                data_len = (resp[3] << 8) | resp[4]
-                payload = resp[5:5+data_len]
-                # Decode ASCII version string skipping status bytes
-                return payload[2:].decode('ascii', errors='ignore').strip()
-        return "IN-R200 UHF Reader"
+            # Read response packet
+            t0 = time.time()
+            buf = bytearray()
+            while time.time() - t0 < 0.2:
+                if self.ser.in_waiting > 0:
+                    buf.extend(self.ser.read(self.ser.in_waiting))
+                    if len(buf) >= 7 and buf[0] == 0xAA:
+                        data_len = (buf[3] << 8) | buf[4]
+                        if len(buf) >= 7 + data_len and buf[6 + data_len] == 0xDD:
+                            payload = buf[5:5+data_len]
+                            return payload[2:].decode('ascii', errors='ignore').strip()
+                time.sleep(0.01)
+            return "IN-R200 UHF Reader"
 
-    def set_rf_power(self, power_dbm: float = 26.0) -> bool:
+    def set_rf_power(self, power_dbm: float = 26.0, delay: float = 0.02) -> bool:
         """
         Configures reader RF Output Power in dBm (e.g., 26.0 dBm).
-        
-        Protocol encoding:
-        Power in dBm * 100 (e.g., 26.0 dBm = 2600 = 0x0A28)
-        Cmd = 0xB6
+        Clamps to hardware limits [15.0, 26.0] dBm.
+        Flushes buffers before and after to ensure no residual frames leak.
         """
-        if not self.ser or not self.ser.is_open:
-            return False
+        with self._lock:
+            if not self.ser or not self.ser.is_open:
+                return False
+                
+            clamped_power = max(self.HARDWARE_MIN_POWER, min(self.HARDWARE_MAX_POWER, round(power_dbm, 1)))
+            power_val = int(clamped_power * 100)
+            data_hex = f"{power_val:04X}"
+            pkt = build_frame("00", "B6", data_hex)
             
-        power_val = int(power_dbm * 100)
-        data_hex = f"{power_val:04X}"
-        pkt = build_frame("00", "B6", data_hex)
+            # Limpa qualquer resíduo na serial antes de enviar nova potência
+            self.ser.reset_input_buffer()
+            self.ser.write(pkt)
+            self.ser.flush()
+
+            # Aguarda e drena a resposta de confirmação (Cmd 0xB6)
+            t0 = time.time()
+            confirmed = False
+            while time.time() - t0 < 0.1:
+                if self.ser.in_waiting > 0:
+                    resp = self.ser.read(self.ser.in_waiting)
+                    if 0xB6 in resp:
+                        confirmed = True
+                        break
+                time.sleep(0.005)
+
+            if delay > 0:
+                time.sleep(delay)
+
+            # Limpa qualquer eco ou lixo residual
+            if self.ser.in_waiting > 0:
+                self.ser.reset_input_buffer()
+
+            return confirmed
+
+    def get_rf_power(self) -> float:
+        """
+        Queries the current PA output power directly from the reader (Cmd 0xB7).
+        """
+        with self._lock:
+            if not self.ser or not self.ser.is_open:
+                return 26.0
+            pkt = build_frame("00", "B7")
+            self.ser.reset_input_buffer()
+            self.ser.write(pkt)
+            self.ser.flush()
+            t0 = time.time()
+            buf = bytearray()
+            while time.time() - t0 < 0.15:
+                if self.ser.in_waiting > 0:
+                    buf.extend(self.ser.read(self.ser.in_waiting))
+                    if len(buf) >= 8 and buf[0] == 0xAA:
+                        dlen = (buf[3] << 8) | buf[4]
+                        if len(buf) >= 7 + dlen and buf[6 + dlen] == 0xDD:
+                            p_val = int.from_bytes(buf[5:5+dlen], byteorder='big')
+                            return p_val / 100.0
+                time.sleep(0.005)
+            return 26.0
+
+    def read_multi_tag(
+        self,
+        loop_count: int = 3,
+        timeout: float = 0.15,
+        target_epc: Optional[str] = None
+    ) -> Dict[str, dict]:
+        """
+        Executes a bounded burst of multi-tag inventory rounds using Cmd 0x27 (Read Multi Tag)
+        with continuous RF carrier wave (CW) across loop_count rounds.
         
-        self.ser.write(pkt)
-        self.ser.flush()
-        time.sleep(0.1)
-        
-        if self.ser.in_waiting > 0:
-            self.ser.read(self.ser.in_waiting)
-            return True
-        return False
+        Parameters:
+        - loop_count : Number of inventory rounds to execute (default: 3 rounds).
+                       Keeps the RF carrier active, giving passive tags sufficient energy
+                       to power on and respond at threshold RF power levels.
+        - timeout    : Maximum time in seconds to wait for responses (default: 0.15s).
+        - target_epc : Optional target EPC string. If provided, stops as soon as the target
+                       is detected, draining any residual bytes to keep buffers clean.
+                       
+        Returns:
+        - Dict[str, dict]: Mapping EPC -> {'rssi': int, 'pc': str, 'count': int}.
+        Synchronous, thread-safe, self-terminating, and leaves the serial buffer completely empty.
+        """
+        clean_target = target_epc.upper() if target_epc else None
+        clamped_loops = max(1, min(65535, loop_count))
+        pkt = build_frame("00", "27", f"22{clamped_loops:04X}")
+
+        with self._lock:
+            if not self.ser or not self.ser.is_open:
+                return {}
+
+            self.ser.reset_input_buffer()
+            self.ser.write(pkt)
+            self.ser.flush()
+
+            t0 = time.time()
+            buf = bytearray()
+            results: Dict[str, dict] = {}
+
+            while time.time() - t0 < timeout:
+                if self.ser.in_waiting > 0:
+                    buf.extend(self.ser.read(self.ser.in_waiting))
+                    
+                    while len(buf) >= 7:
+                        aa_pos = buf.find(0xAA)
+                        if aa_pos == -1:
+                            buf.clear()
+                            break
+                        if aa_pos > 0:
+                            buf = buf[aa_pos:]
+                            
+                        if len(buf) < 7:
+                            break
+                            
+                        dlen = (buf[3] << 8) | buf[4]
+                        total_len = 7 + dlen
+                        if len(buf) >= total_len:
+                            pkt_bytes = bytes(buf[:total_len])
+                            buf = buf[total_len:]
+                            
+                            if pkt_bytes[-1] == 0xDD:
+                                cmd = pkt_bytes[2]
+                                if cmd == 0x22 and dlen >= 5:
+                                    payload = pkt_bytes[5:5+dlen]
+                                    rssi = int.from_bytes(payload[0:1], byteorder="big", signed=True)
+                                    pc = payload[1:3].hex().upper()
+                                    epc = payload[3:-2].hex().upper() if dlen > 5 else payload[3:].hex().upper()
+                                    
+                                    if clean_target is None or epc == clean_target:
+                                        if epc not in results:
+                                            results[epc] = {"rssi": rssi, "pc": pc, "count": 1}
+                                        else:
+                                            results[epc]["count"] += 1
+                                            results[epc]["rssi"] = rssi
+                        else:
+                            break
+
+                if clean_target and clean_target in results:
+                    break
+
+                if len(results) > 0 and sum(r["count"] for r in results.values()) >= clamped_loops:
+                    break
+
+                time.sleep(0.002)
+
+            time.sleep(0.005)
+            if self.ser.in_waiting > 0:
+                self.ser.reset_input_buffer()
+
+            return results
+
+    def read_single_tag(self, timeout: float = 0.15) -> Optional[Tuple[str, int, str]]:
+        """
+        Executes a single synchronous tag interrogation round using Cmd 0x22 (Read Single Tag).
+        Returns (epc, rssi_dbm, pc) if a tag responds, or None if no tag / timeout.
+        Thread-safe, synchronous, and guaranteed NOT to leave background streaming in the buffer.
+        """
+        res = self.read_multi_tag(loop_count=1, timeout=timeout)
+        if res:
+            first_epc = next(iter(res))
+            info = res[first_epc]
+            return first_epc, info["rssi"], info["pc"]
+        return None
 
     def start_inventory(self, tag_callback: Callable[[str, int, str], None]):
         """
@@ -169,8 +321,8 @@ class INR200Reader:
             return
         self.is_reading = True
         
-        # Cmd 0x27 = Read Multi Tag, Payload = 0000FFFF (65535 rounds per burst)
-        pkt_start = build_frame("00", "27", "0000FFFF")
+        # Cmd 0x27 = Read Multi Tag, Payload = "22FFFF" (repetir Cmd 0x22 por 65535 rounds)
+        pkt_start = build_frame("00", "27", "22FFFF")
 
         def _reader_loop():
             """
@@ -183,82 +335,91 @@ class INR200Reader:
             while self.is_reading:
                 now = time.time()
                 
-                # WATCHDOG MECHANISM:
-                # If no tag data received for 1.0 second (meaning the batch finished),
-                # re-trigger the inventory command so reading runs continuously forever.
+                # Re-dispara inventário a cada 1.0s se nenhum dado novo chegar
                 if now - last_cmd_sent > 1.0:
-                    if self.ser and self.ser.is_open:
-                        self.ser.write(pkt_start)
-                        self.ser.flush()
-                        last_cmd_sent = now
+                    with self._lock:
+                        if self.ser and self.ser.is_open:
+                            self.ser.write(pkt_start)
+                            self.ser.flush()
+                            last_cmd_sent = now
 
-                # Check if serial data is available in buffer
-                if self.ser and self.ser.in_waiting > 0:
-                    buffer.extend(self.ser.read(self.ser.in_waiting))
+                # Leitura segura com lock
+                chunk = b""
+                with self._lock:
+                    if self.ser and self.ser.is_open and self.ser.in_waiting > 0:
+                        chunk = self.ser.read(self.ser.in_waiting)
+
+                if chunk:
+                    buffer.extend(chunk)
                     
-                    # Search and extract complete frames (0xAA header to 0xDD ender)
-                    while len(buffer) > 0:
+                    # Parseamento estrito de frames usando data_len e delimitadores
+                    while len(buffer) >= 7:
                         aa_pos = buffer.find(0xAA)
                         if aa_pos == -1:
                             buffer.clear()
                             break
+                        if aa_pos > 0:
+                            buffer = buffer[aa_pos:]
                             
-                        dd_pos = buffer.find(0xDD, aa_pos)
-                        if dd_pos != -1:
-                            # Extract full packet byte slice
-                            pkt = bytes(buffer[aa_pos:dd_pos+1])
-                            buffer = buffer[dd_pos+1:]
+                        if len(buffer) < 7:
+                            break
                             
-                            # Verify if packet is a Tag Inventory Report (Cmd 0x22 or 0x27)
-                            if len(pkt) >= 8 and pkt[2] in (0x22, 0x27):
-                                data_len = (pkt[3] << 8) | pkt[4]
-                                data = pkt[5:5+data_len]
-                                
-                                if len(data) >= 5:
-                                    # Reset watchdog timer because reader is actively transmitting
+                        data_len = (buffer[3] << 8) | buffer[4]
+                        total_len = 7 + data_len
+                        if len(buffer) >= total_len:
+                            pkt = bytes(buffer[:total_len])
+                            buffer = buffer[total_len:]
+                            
+                            if pkt[-1] == 0xDD and pkt[2] in (0x22, 0x27):
+                                payload = pkt[5:5+data_len]
+                                if len(payload) >= 5:
                                     last_cmd_sent = time.time()
-                                    
-                                    # Parse Data Payload Fields:
-                                    # Byte 0      : RSSI (Received Signal Strength Indicator)
-                                    # Bytes 1..2  : PC (Protocol Control word, e.g. 3400)
-                                    # Bytes 3..N-2: EPC (Electronic Product Code, 96-bit / 24 hex characters)
-                                    rssi = data[0]
-                                    pc = data[1:3].hex().upper()
-                                    epc = data[3:-2].hex().upper() if len(data) > 5 else data[3:].hex().upper()
-                                    
+                                    # RSSI com sinal em complemento de dois
+                                    rssi = int.from_bytes(payload[0:1], byteorder="big", signed=True)
+                                    pc = payload[1:3].hex().upper()
+                                    epc = payload[3:-2].hex().upper() if len(payload) > 5 else payload[3:].hex().upper()
                                     if epc:
-                                        # Invoke user callback with parsed tag details
                                         tag_callback(epc, rssi, pc)
                         else:
                             break
                 time.sleep(0.01)
 
-        # Spawn background daemon thread for non-blocking execution
+        # Dispara thread daemon
         self._read_thread = threading.Thread(target=_reader_loop, daemon=True)
         self._read_thread.start()
 
-    def stop_inventory(self):
+    def stop_inventory(self, delay: float = 0.05):
         """
-        Sends Stop Inventory command (Cmd 0x28) to reader and stops background thread.
+        Sends Stop Inventory command (Cmd 0x28) to reader and waits for background thread to exit.
+        Drains and clears input buffer to guarantee no residual frames remain.
         """
         if not self.is_reading:
             return
         self.is_reading = False
         
-        if self.ser and self.ser.is_open:
-            # Cmd 0x28 = Stop Read Multi Tag
-            pkt_stop = build_frame("00", "28")
-            self.ser.write(pkt_stop)
-            self.ser.flush()
-            time.sleep(0.1)
-            if self.ser.in_waiting > 0:
-                self.ser.read(self.ser.in_waiting)
+        with self._lock:
+            if self.ser and self.ser.is_open:
+                pkt_stop = build_frame("00", "28")
+                self.ser.write(pkt_stop)
+                self.ser.flush()
+
+        if self._read_thread and self._read_thread.is_alive():
+            self._read_thread.join(timeout=0.3)
+
+        if delay > 0:
+            time.sleep(delay)
+
+        with self._lock:
+            if self.ser and self.ser.is_open and self.ser.in_waiting > 0:
+                self.ser.reset_input_buffer()
 
     def close(self):
         """
         Safely stops inventory scanning and closes serial port connection.
         """
         self.stop_inventory()
-        if self.ser and self.ser.is_open:
-            self.ser.close()
-            print("Reader connection closed.")
+        with self._lock:
+            if self.ser and self.ser.is_open:
+                self.ser.close()
+                print("Reader connection closed.")
+

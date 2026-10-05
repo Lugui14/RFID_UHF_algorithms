@@ -57,6 +57,28 @@ python mrt_calculator.py
 
 ---
 
+### 3. Mapeador de Novas Tags (`mapear_tags.py`)
+
+Utilitário exclusivo para descobrir, identificar e registrar novas tags RFID UHF (individualmente ou em pares de Sensoriamento/Referência):
+
+```bash
+python mapear_tags.py
+```
+
+- **Menu Interativo:**
+  - `1. Varredura em Tempo Real`: Monitora todas as tags no campo com barra visual de sinal RSSI e contagem. Ao parar, permite salvar qualquer tag detectada.
+  - `2. Assistente Guiado de Pares`: Conduz passo a passo a identificação da **Tag de Sensoriamento** e da **Tag de Referência** (com opção de usar baixa potência RF para isolamento de tags próximas), salvando o setup e permitindo anexar diretamente em `anotacoes.md`.
+  - `3. Mapear Tag Individual`: Atribui nome, papel e setup para qualquer tag aproximada da antena.
+  - `4. Listar Tags Salvas`: Exibe o banco de dados em `tags_mapeadas.json`.
+  - `5. Exportar para Markdown`: Gera blocos prontos para copiar e colar nos arquivos de experimentos.
+- **Opções via linha de comando:**
+  - `python mapear_tags.py --scan`: Executa diretamente a varredura ao vivo.
+  - `python mapear_tags.py --pair`: Abre direto o assistente de par.
+  - `python mapear_tags.py --list`: Lista o catálogo de tags e pares cadastrados.
+  - `python mapear_tags.py --simulado`: Permite simular operações sem necessidade do leitor físico conectado.
+
+---
+
 ## 📚 Documentação Detalhada
 
 Para detalhes arquiteturais, especificações de protocolo binário e formulação matemática:
