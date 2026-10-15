@@ -28,16 +28,23 @@ sudo usermod -aG dialout $USER
 
 ## 🚀 Como Usar
 
-### 1. Leitura Contínua de Tags (`main.py`)
+### 1. Execução do Experimento 7 (`main.py`)
 
-Utilizado para inventário contínuo de tags em tempo real a uma potência fixa de transmissão (ex: 26.0 dBm).
+Pipeline experimental automatizado para o **Experimento 7** (medição de **DMRT, MRT e RSSI** investigando a **invariância espacial e angular** sob **faixa única/constante de umidade do solo**):
 
 ```bash
-python main.py
+# Verificar status das baterias do Experimento 7
+python main.py --status
+
+# Executar bateria 1 (Centro, rotação 0°) com 300 leituras (informando a umidade fixa aferida)
+python main.py --bateria 1 --umidade 48.0
+
+# Ou executar passando diretamente posição e rotação:
+python main.py --posicao pos_esq --rotacao 90
 ```
 
-- **Funcionamento:** Conecta à porta `/dev/ttyUSB0` a 115200 baud, ajusta a potência da antena e inicia uma thread em segundo plano com um **mecanismo de Watchdog** que re-engatilha o leitor automaticamente.
-- **Saída:** Exibe as tags descobertas em tempo real (EPC, sinal RSSI e PC Word). Ao pressionar `Ctrl+C`, exibe um resumo estatístico das tags lidas.
+- **Métricas:** Limiar Mínimo de Resposta da Tag Sensoriamento (MRT bruto e filtrado EMA), Limiar da Tag de Referência, Diferencial $\text{DMRT} = \text{MRT}_{\text{sens}} - \text{MRT}_{\text{ref}}$, e RSSI de ambas as tags.
+- **Saídas:** CSV detalhado por leitura, painel gráfico de 3 eixos (PNG), tabela consolidada `experimento_7/consolidado_exp7.csv` e curvas analíticas.
 
 ---
 

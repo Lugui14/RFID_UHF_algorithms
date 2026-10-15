@@ -51,7 +51,9 @@ class DMRTExporter:
         ref_filt_mrt: Optional[float] = None,
         ref_rssi: Optional[float] = None,
         dmrt: Optional[float] = None,
-        moisture_pct: Optional[float] = None
+        moisture_pct: Optional[float] = None,
+        rotation_deg: Optional[float] = None,
+        position: Optional[str] = None
     ):
         """
         Logs complete second-by-second experiment metrics (MRT raw/filt, RSSI, DMRT) for Sensing and Reference tags.
@@ -60,6 +62,8 @@ class DMRTExporter:
             "second": second,
             "elapsed_seconds": round(time.time() - self.start_time, 2),
             "moisture_pct": moisture_pct,
+            "rotation_deg": rotation_deg,
+            "position": position,
             "sensing_raw_mrt": round(sensing_raw_mrt, 2) if sensing_raw_mrt is not None else None,
             "sensing_filt_mrt": round(sensing_filt_mrt, 2) if sensing_filt_mrt is not None else None,
             "sensing_rssi": round(sensing_rssi, 1) if sensing_rssi is not None else None,

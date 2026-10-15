@@ -53,6 +53,18 @@
       "funcao": "sensoriamento",
       "setup": "6",
       "data_cadastro": "2026-09-22"
+    },
+    "E2806995000050136FD0B575": {
+      "nome": "sensoriamente-exp-7",
+      "funcao": "sensoriamento",
+      "setup": "7",
+      "data_cadastro": "2026-10-06"
+    },
+    "E2806995000050136FD0B975": {
+      "nome": "referencia-exp-7",
+      "funcao": "referencia",
+      "setup": "7",
+      "data_cadastro": "2026-10-06"
     }
   },
   "pares": [
@@ -85,6 +97,12 @@
       "sensoriamento": "E2806995000050136FD09D75",
       "referencia": "E2806995000050136FD0A175",
       "data_cadastro": "2026-09-22"
+    },
+    {
+      "experimento": "Experimento 7 - Umidade, Rotação e Espacial",
+      "sensoriamento": "E2806995000050136FD0B575",
+      "referencia": "E2806995000050136FD0B975",
+      "data_cadastro": "2026-10-06"
     }
   ]
 }
