@@ -28,23 +28,30 @@ sudo usermod -aG dialout $USER
 
 ## 🚀 Como Usar
 
-### 1. Execução do Experimento 7 (`main.py`)
+### 1. Execução do Experimento 8 (`main.py`)
 
-Pipeline experimental automatizado para o **Experimento 7** (medição de **DMRT, MRT e RSSI** investigando a **invariância espacial e angular** sob **faixa única/constante de umidade do solo**):
+Pipeline experimental automatizado para o **Experimento 8** (medição de **DMRT, MRT e RSSI** em **6 diferentes localizações** com a **mesma umidade do solo**, realizando 300 medições por localidade para comprovar a resiliência da métrica):
 
 ```bash
-# Verificar status das baterias do Experimento 7
+# Verificar status das 6 localizações do Experimento 8
 python main.py --status
 
-# Executar bateria 1 (Centro, rotação 0°) com 300 leituras (informando a umidade fixa aferida)
-python main.py --bateria 1 --umidade 48.0
+# Executar Localização 1 com 300 medições (informando a umidade fixa aferida)
+python main.py --local 1 --umidade 48.0
 
-# Ou executar passando diretamente posição e rotação:
-python main.py --posicao pos_esq --rotacao 90
+# Executar nas demais localizações (2 a 6), opcionalmente nomeando o local:
+python main.py --local 2 --nome "Local 2"
+python main.py --local 3 --nome "Local 3"
+python main.py --local 4 --nome "Local 4"
+python main.py --local 5 --nome "Local 5"
+python main.py --local 6 --nome "Local 6"
+
+# Regenerar os gráficos finais de variação do DMRT nas 6 localidades
+python main.py --plot
 ```
 
 - **Métricas:** Limiar Mínimo de Resposta da Tag Sensoriamento (MRT bruto e filtrado EMA), Limiar da Tag de Referência, Diferencial $\text{DMRT} = \text{MRT}_{\text{sens}} - \text{MRT}_{\text{ref}}$, e RSSI de ambas as tags.
-- **Saídas:** CSV detalhado por leitura, painel gráfico de 3 eixos (PNG), tabela consolidada `experimento_7/consolidado_exp7.csv` e curvas analíticas.
+- **Saídas:** CSV detalhado por leitura (`experimento_8/local_0X_resultados.csv`), painel gráfico de 3 eixos por localidade (`experimento_8/local_0X_grafico.png`), tabela consolidada `experimento_8/consolidado_exp8.csv` e gráficos analíticos de resiliência (`experimento_8/variacao_dmrt_localidades.png` e `experimento_8/comparativo_metricas_localidades.png`).
 
 ---
 

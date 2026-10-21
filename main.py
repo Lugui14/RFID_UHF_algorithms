@@ -1,22 +1,24 @@
 """
 ===================================================================================
- Experimento 7: Invariância Espacial e Angular do DMRT sob Umidade Fixa do Solo
- Métricas: DMRT, MRT (Sensoriamento e Referência) e RSSI
+ Experimento 8: Resiliência Ambiental do DMRT em 6 Diferentes Localizações
+ Métricas: DMRT, MRT (Sensoriamento e Referência) e RSSI sob Umidade Constante
 ===================================================================================
  Descrição:
- - Avalia a estabilidade da métrica diferencial GreenTag (ACM TOSN 2025) sob uma
-   faixa constante e controlada de umidade do solo em duas dimensões de canal:
-     1. Variação de Orientação Angular da Tag (Rotações do vaso: 0°, 90°, 180°, 270°)
-     2. Deslocamento Espacial do Vaso na Bancada (pos_centro, pos_esq, pos_dir, pos_frente)
+ - Avalia a resiliência e invariância ambiental da métrica diferencial GreenTag
+   (ACM TOSN 2025) posicionando o setup completo do experimento (antena + vaso
+   com tags de sensoriamento e referência em geometria fixa) em 6 diferentes
+   localizações físicas (diferentes ambientes/bancadas com distintos perfis de
+   reflexão e multicaminho), mantendo a mesma umidade do solo.
  - Duas tags RFID UHF mapeadas:
      * Tag de Sensoriamento : E2806995000050136FD0B575 (no substrato do vaso)
      * Tag de Referência    : E2806995000050136FD0B975 (isolada no ar/referência)
- - Mede para cada combinação:
+ - Mede para cada uma das 6 localidades (300 medições por localidade):
      * MRT da Tag de Sensoriamento (bruto e filtrado EMA)
      * MRT da Tag de Referência (bruto e filtrado EMA)
      * DMRT (Limiar Mínimo Diferencial: MRT_sens - MRT_ref)
      * RSSI da Tag de Sensoriamento e da Tag de Referência
- - 300 medições por combinação com parada antecipada otimizada (early-stop).
+ - Ao final, consolida os dados e gera os gráficos de variação do DMRT nas 6
+   localidades para comprovar a resiliência da métrica frente ao ambiente.
 ===================================================================================
 """
 
@@ -35,47 +37,30 @@ from in_r200_driver import INR200Reader
 from mrt_calculator import MRTCalculator
 from dmrt_exporter import DMRTExporter
 
-# Diretórios e caminhos padrão do Experimento 7
-EXP7_DIR = "experimento_7"
-DEFAULT_MD_FILE = os.path.join(EXP7_DIR, "experimento7.md")
+# Diretórios e caminhos padrão do Experimento 8
+EXP8_DIR = "experimento_8"
+DEFAULT_MD_FILE = os.path.join(EXP8_DIR, "experimento8.md")
 DEFAULT_JSON_FILE = "tags_mapeadas.json"
-CONSOLIDATED_CSV = os.path.join(EXP7_DIR, "consolidado_exp7.csv")
-CHART_ROTATION_DMRT = os.path.join(EXP7_DIR, "curva_rotacao_vs_dmrt_por_posicao.png")
-CHART_SPATIAL_DMRT = os.path.join(EXP7_DIR, "curva_posicoes_espaciais_vs_metricas.png")
+CONSOLIDATED_CSV = os.path.join(EXP8_DIR, "consolidado_exp8.csv")
+CHART_DMRT_LOCATIONS = os.path.join(EXP8_DIR, "variacao_dmrt_localidades.png")
+CHART_METRICS_COMPARISON = os.path.join(EXP8_DIR, "comparativo_metricas_localidades.png")
 
 DEFAULT_TARGET_READINGS = 300
 TAG_TIMEOUT = 10.0
 
 # -----------------------------------------------------------------------------------
-# Catálogo das 16 Baterias Padrão (4 Posições Espaciais x 4 Rotações do Vaso Quadrado)
+# Catálogo das 6 Localizações do Experimento 8 (Mesma Umidade e Mesma Geometria Fixa)
 # -----------------------------------------------------------------------------------
-BATERIAS_CONFIG = {
-    # Bloco 1: Posição Central (Ponto de Referência)
-    1:  {"posicao": "pos_centro", "pos_label": "Centro",    "rotacao": 0,   "face": "Face 1 (Frontal)"},
-    2:  {"posicao": "pos_centro", "pos_label": "Centro",    "rotacao": 90,  "face": "Face 2 (Lateral Dir.)"},
-    3:  {"posicao": "pos_centro", "pos_label": "Centro",    "rotacao": 180, "face": "Face 3 (Traseira)"},
-    4:  {"posicao": "pos_centro", "pos_label": "Centro",    "rotacao": 270, "face": "Face 4 (Lateral Esq.)"},
-
-    # Bloco 2: Deslocado para a Esquerda (~15 cm)
-    5:  {"posicao": "pos_esq",    "pos_label": "Esquerda",  "rotacao": 0,   "face": "Face 1 (Frontal)"},
-    6:  {"posicao": "pos_esq",    "pos_label": "Esquerda",  "rotacao": 90,  "face": "Face 2 (Lateral Dir.)"},
-    7:  {"posicao": "pos_esq",    "pos_label": "Esquerda",  "rotacao": 180, "face": "Face 3 (Traseira)"},
-    8:  {"posicao": "pos_esq",    "pos_label": "Esquerda",  "rotacao": 270, "face": "Face 4 (Lateral Esq.)"},
-
-    # Bloco 3: Deslocado para a Direita (~15 cm)
-    9:  {"posicao": "pos_dir",    "pos_label": "Direita",   "rotacao": 0,   "face": "Face 1 (Frontal)"},
-    10: {"posicao": "pos_dir",    "pos_label": "Direita",   "rotacao": 90,  "face": "Face 2 (Lateral Dir.)"},
-    11: {"posicao": "pos_dir",    "pos_label": "Direita",   "rotacao": 180, "face": "Face 3 (Traseira)"},
-    12: {"posicao": "pos_dir",    "pos_label": "Direita",   "rotacao": 270, "face": "Face 4 (Lateral Esq.)"},
-
-    # Bloco 4: Deslocado para a Frente (~15 cm)
-    13: {"posicao": "pos_frente", "pos_label": "Frente",    "rotacao": 0,   "face": "Face 1 (Frontal)"},
-    14: {"posicao": "pos_frente", "pos_label": "Frente",    "rotacao": 90,  "face": "Face 2 (Lateral Dir.)"},
-    15: {"posicao": "pos_frente", "pos_label": "Frente",    "rotacao": 180, "face": "Face 3 (Traseira)"},
-    16: {"posicao": "pos_frente", "pos_label": "Frente",    "rotacao": 270, "face": "Face 4 (Lateral Esq.)"},
+LOCALIDADES_CONFIG = {
+    1: {"codigo": "local_01", "nome": "Localização 01", "descricao": "Ambiente / Ponto de Teste 1"},
+    2: {"codigo": "local_02", "nome": "Localização 02", "descricao": "Ambiente / Ponto de Teste 2"},
+    3: {"codigo": "local_03", "nome": "Localização 03", "descricao": "Ambiente / Ponto de Teste 3"},
+    4: {"codigo": "local_04", "nome": "Localização 04", "descricao": "Ambiente / Ponto de Teste 4"},
+    5: {"codigo": "local_05", "nome": "Localização 05", "descricao": "Ambiente / Ponto de Teste 5"},
+    6: {"codigo": "local_06", "nome": "Localização 06", "descricao": "Ambiente / Ponto de Teste 6"},
 }
 
-# Tags padrão cadastradas do Experimento 7
+# Tags padrão cadastradas para o Experimento 8
 DEFAULT_SENSING_EPC = "E2806995000050136FD0B575"
 DEFAULT_REF_EPC     = "E2806995000050136FD0B975"
 
@@ -84,62 +69,57 @@ scanned_tags: Dict[str, dict] = {}
 
 
 # ===================================================================================
-# Simulação Virtual (Mock) para Testes Offline do Experimento 7
+# Simulação Virtual (Mock) para Testes Offline do Experimento 8
 # ===================================================================================
 
-class MockReaderForExp7:
+class MockReaderForExp8:
     """
-    Simulador físico para testes offline do Experimento 7 sob umidade constante:
-    - Umidade do solo fixada.
-    - Perturbações espaciais e rotacionais introduzem perdas de propagação e descasamento
-      angular que afetam ambas as tags de forma comum.
-    - O DMRT (MRT_sens - MRT_ref) demonstra o cancelamento dessas perturbações.
+    Simulador físico para testes offline do Experimento 8 sob umidade constante:
+    - Umidade do solo e geometria antena-vaso fixadas.
+    - Cada uma das 6 localizações introduz diferentes reflexões ambientais (multicaminho)
+      que deslocam os MRTs absolutos em modo comum, enquanto o DMRT permanece resiliente.
     """
     def __init__(self, port: str = "/dev/ttyUSB0", baudrate: int = 115200,
                  sensing_epc: str = DEFAULT_SENSING_EPC, ref_epc: str = DEFAULT_REF_EPC,
-                 moisture_pct: float = 48.0, rotation_deg: int = 0, position: str = "pos_centro"):
+                 moisture_pct: float = 48.0, local_num: int = 1):
         self.port = port
         self.baudrate = baudrate
         self.sensing_epc = sensing_epc.upper()
         self.ref_epc = ref_epc.upper()
         self.moisture_pct = moisture_pct
-        self.rotation_deg = rotation_deg
-        self.position = position
+        self.local_num = local_num
         self.power = 26.0
         self.is_reading = False
 
     def connect(self) -> bool:
-        print(f"⚡ [MODO SIMULADO EXP7] Conectado virtualmente em {self.port}")
+        print(f"⚡ [MODO SIMULADO EXP8] Conectado virtualmente em {self.port} (Localização {self.local_num})")
         return True
 
     def get_module_info(self) -> str:
-        return "IN-R200 M100 V1.0 (SIMULADO EXP7)"
+        return "IN-R200 M100 V1.0 (SIMULADO EXP8)"
 
     def set_rf_power(self, power_dbm: float = 26.0, delay: float = 0.0) -> bool:
         self.power = power_dbm
         return True
 
     def _get_thresholds(self) -> Tuple[float, float]:
-        """Calcula limiares simulados de MRT com perturbações espacial e angular comuns."""
-        # Desvio angular pela rotação da tag/antena
-        rot_offsets = {0: 0.0, 90: 0.8, 180: -0.4, 270: 0.5}
-        rot_offset = rot_offsets.get(self.rotation_deg, 0.0)
-
-        # Desvio espacial por posição na bancada (path loss / descentralização)
-        pos_offsets = {
-            "pos_centro": 0.0,
-            "pos_esq": 1.2,
-            "pos_dir": 1.0,
-            "pos_frente": 0.8
+        """Calcula limiares simulados de MRT com perturbação ambiental comum por localidade."""
+        env_offsets = {
+            1: 0.0,
+            2: 1.1,
+            3: -0.5,
+            4: 1.6,
+            5: 0.7,
+            6: 1.3
         }
-        pos_offset = pos_offsets.get(self.position, 1.0)
+        env_offset = env_offsets.get(self.local_num, 0.5)
 
-        # Referência: ~16.0 dBm no centro + perturbação angular e espacial
-        ref_threshold = round(16.0 + rot_offset + pos_offset + random.uniform(-0.15, 0.15), 1)
+        # Referência: ~15.5 dBm base + perturbação do ambiente (modo comum)
+        ref_threshold = round(15.5 + env_offset + random.uniform(-0.15, 0.15), 1)
 
-        # Sensoriamento: ~18.5 dBm no centro (função da umidade de ~48%) + perturbações idênticas
-        base_sens = 15.0 + (self.moisture_pct - 20.0) * 0.12
-        sens_threshold = round(base_sens + rot_offset + pos_offset + random.uniform(-0.15, 0.15), 1)
+        # Sensoriamento: função da umidade fixa + mesma perturbação do ambiente
+        base_sens = 15.5 + (self.moisture_pct - 20.0) * 0.12
+        sens_threshold = round(base_sens + env_offset + random.uniform(-0.15, 0.15), 1)
 
         sens_threshold = max(15.0, min(26.0, sens_threshold))
         ref_threshold = max(15.0, min(26.0, ref_threshold))
@@ -152,12 +132,12 @@ class MockReaderForExp7:
 
         if self.power >= sens_thresh:
             if target_epc is None or target_epc.upper() == self.sensing_epc:
-                rssi = int(-70 + (self.power - sens_thresh) * 1.5 + random.uniform(-1, 1))
+                rssi = int(-71 + (self.power - sens_thresh) * 1.5 + random.uniform(-1, 1))
                 detected[self.sensing_epc] = {"rssi": rssi, "pc": "3400", "count": loop_count}
 
         if self.power >= ref_thresh:
             if target_epc is None or target_epc.upper() == self.ref_epc:
-                rssi = int(-68 + (self.power - ref_thresh) * 1.5 + random.uniform(-1, 1))
+                rssi = int(-58 + (self.power - ref_thresh) * 1.5 + random.uniform(-1, 1))
                 detected[self.ref_epc] = {"rssi": rssi, "pc": "3400", "count": loop_count}
 
         return detected
@@ -194,7 +174,7 @@ def is_valid_hex_epc(epc: Optional[str]) -> bool:
 
 
 def load_tags_from_markdown(md_path: str = DEFAULT_MD_FILE) -> Tuple[Optional[str], Optional[str]]:
-    """Carrega as tags do Experimento 7 do arquivo markdown de documentação."""
+    """Carrega as tags do Experimento 8 do arquivo markdown de documentação."""
     if not os.path.exists(md_path):
         return None, None
     try:
@@ -213,7 +193,7 @@ def load_tags_from_markdown(md_path: str = DEFAULT_MD_FILE) -> Tuple[Optional[st
 
 
 def load_tags_from_json(json_path: str = DEFAULT_JSON_FILE) -> Tuple[Optional[str], Optional[str]]:
-    """Carrega as tags cadastradas do Experimento 7 a partir do arquivo JSON."""
+    """Carrega as tags cadastradas do Experimento 8 (ou 7) a partir do arquivo JSON."""
     if not os.path.exists(json_path):
         return None, None
     try:
@@ -221,17 +201,18 @@ def load_tags_from_json(json_path: str = DEFAULT_JSON_FILE) -> Tuple[Optional[st
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        # 1. Verifica na lista de pares
-        for pair in data.get("pares", []):
-            if "7" in str(pair.get("experimento", "")):
-                return pair.get("sensoriamento"), pair.get("referencia")
+        # 1. Verifica na lista de pares (prioriza Experimento 8, fallback Experimento 7)
+        for exp_id in ("8", "7"):
+            for pair in data.get("pares", []):
+                if exp_id in str(pair.get("experimento", "")):
+                    return pair.get("sensoriamento"), pair.get("referencia")
 
-        # 2. Verifica nas tags individuais associadas ao setup 7
+        # 2. Verifica nas tags individuais associadas ao setup 8 ou 7
         sens, ref = None, None
         for epc, info in data.get("tags", {}).items():
             setup_str = str(info.get("setup", ""))
             nome_str = str(info.get("nome", "")).lower()
-            if setup_str == "7" or "exp-7" in nome_str or "exp 7" in nome_str:
+            if setup_str in ("8", "7") or "exp-8" in nome_str or "exp-7" in nome_str:
                 if info.get("funcao") == "sensoriamento" and not sens:
                     sens = epc
                 elif info.get("funcao") == "referencia" and not ref:
@@ -256,7 +237,7 @@ def resolve_tags(args, reader: Optional[INR200Reader] = None) -> Tuple[str, str]
     if is_valid_hex_epc(sensing_epc) and is_valid_hex_epc(ref_epc):
         return sensing_epc, ref_epc
 
-    print(f"⚠️ Usando tags padrão do Experimento 7: {DEFAULT_SENSING_EPC} / {DEFAULT_REF_EPC}")
+    print(f"⚠️ Usando tags padrão do Experimento 8: {DEFAULT_SENSING_EPC} / {DEFAULT_REF_EPC}")
     return DEFAULT_SENSING_EPC, DEFAULT_REF_EPC
 
 
@@ -291,10 +272,10 @@ def is_tag_active(epc: str, current_time: float) -> bool:
 def print_table(
     reading_counter: int,
     target_readings: int,
-    bateria_num: Optional[int],
+    local_num: int,
+    local_code: str,
+    local_name: str,
     moisture_pct: float,
-    rotation_deg: int,
-    position_name: str,
     sensing_epc: str,
     reference_epc: str,
     sens_hist_raw: List[float],
@@ -310,24 +291,22 @@ def print_table(
     pct = (reading_counter / target_readings) * 100.0
 
     s_mean_filt = sum(sens_hist_filt) / len(sens_hist_filt) if sens_hist_filt else 0.0
-    s_mean_raw  = sum(sens_hist_raw) / len(sens_hist_raw) if sens_hist_raw else 0.0
     s_mean_rssi = sum(sens_hist_rssi) / len(sens_hist_rssi) if sens_hist_rssi else 0.0
 
     r_mean_filt = sum(ref_hist_filt) / len(ref_hist_filt) if ref_hist_filt else 0.0
-    r_mean_raw  = sum(ref_hist_raw) / len(ref_hist_raw) if ref_hist_raw else 0.0
     r_mean_rssi = sum(ref_hist_rssi) / len(ref_hist_rssi) if ref_hist_rssi else 0.0
 
     dmrt_mean = sum(dmrt_hist) / len(dmrt_hist) if dmrt_hist else 0.0
 
-    bat_label = f"BATERIA {bateria_num:02d}/16" if bateria_num else f"LOCAL: {position_name.upper()}"
-    header = f" EXPERIMENTO 7 | {bat_label} | POS: {position_name} | ROTAÇÃO: {rotation_deg}° | UMID: {moisture_pct:.1f}% | Varredura {reading_counter:04d}/{target_readings:04d} ({pct:.1f}%)"
+    loc_label = f"LOCAL {local_num:02d}/06 ({local_name})"
+    header = f" EXPERIMENTO 8 | {loc_label} | UMIDADE FIXA: {moisture_pct:.1f}% | Varredura {reading_counter:04d}/{target_readings:04d} ({pct:.1f}%)"
     divider = "+" + "-" * 15 + "+" + "-" * 12 + "+" + "-" * 26 + "+" + "-" * 11 + "+" + "-" * 12 + "+" + "-" * 13 + "+" + "-" * 15 + "+"
 
     print("\n" + "=" * 113)
     print(f"{header:<113}")
     print("=" * 113)
     print(divider)
-    print(f"| {'Condição':<13} | {'Função':<10} | {'Código EPC':<24} | {'RSSI':<9} | {'Raw MRT':<10} | {'Filt. MRT':<11} | {'MRT Médio Acum':<13} |")
+    print(f"| {'Localidade':<13} | {'Função':<10} | {'Código EPC':<24} | {'RSSI':<9} | {'Raw MRT':<10} | {'Filt. MRT':<11} | {'MRT Médio Acum':<13} |")
     print(divider)
 
     # Linha da Tag de Sensoriamento
@@ -339,8 +318,7 @@ def print_table(
     else:
         s_rssi_str, s_raw_str, s_filt_str = "Not seen", "N/A", "N/A"
 
-    cond_str = f"{position_name[:5]} R{rotation_deg}°"
-    print(f"| {cond_str:<13} | {'Sensor':<10} | {sensing_epc:<24} | {s_rssi_str:<9} | {s_raw_str:<10} | {s_filt_str:<11} | {s_mean_filt:11.2f} dBm |")
+    print(f"| {local_code:<13} | {'Sensor':<10} | {sensing_epc:<24} | {s_rssi_str:<9} | {s_raw_str:<10} | {s_filt_str:<11} | {s_mean_filt:11.2f} dBm |")
 
     # Linha da Tag de Referência
     if is_tag_active(reference_epc, current_time):
@@ -369,12 +347,12 @@ def print_table(
 
 
 def show_experiment_status():
-    """Exibe o status consolidado de todas as 16 baterias do catálogo."""
-    print("\n" + "=" * 116)
-    print("               STATUS DO EXPERIMENTO 7: INVARIÂNCIA ESPACIAL E ANGULAR SOB UMIDADE FIXA")
-    print("=" * 116)
-    print(f"| {'Bat':<3} | {'Posição Espacial':<18} | {'Rot (°)':<7} | {'Orientação Tag':<21} | {'Leituras':<8} | {'DMRT Médio':<11} | {'MRT Sensor':<11} | {'Status':<11} |")
-    print("+" + "-" * 5 + "+" + "-" * 20 + "+" + "-" * 9 + "+" + "-" * 23 + "+" + "-" * 10 + "+" + "-" * 13 + "+" + "-" * 13 + "+" + "-" * 13 + "+")
+    """Exibe o status consolidado das 6 localizações do Experimento 8."""
+    print("\n" + "=" * 120)
+    print("          STATUS DO EXPERIMENTO 8: RESILIÊNCIA DO DMRT EM 6 DIFERENTES LOCALIZAÇÕES (UMIDADE FIXA)")
+    print("=" * 120)
+    print(f"| {'Loc':<3} | {'Código':<10} | {'Nome / Ambiente':<24} | {'Umid.':<6} | {'Leituras':<8} | {'DMRT Médio (±Std)':<18} | {'MRT Sensor':<11} | {'MRT Ref':<10} | {'Status':<11} |")
+    print("+" + "-" * 5 + "+" + "-" * 12 + "+" + "-" * 26 + "+" + "-" * 8 + "+" + "-" * 10 + "+" + "-" * 20 + "+" + "-" * 13 + "+" + "-" * 12 + "+" + "-" * 13 + "+")
 
     completed: Dict[str, dict] = {}
     if os.path.exists(CONSOLIDATED_CSV):
@@ -382,47 +360,79 @@ def show_experiment_status():
             with open(CONSOLIDATED_CSV, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    key = row.get("bateria", "").strip()
+                    key = row.get("local_num", "").strip()
                     if key:
                         completed[key] = row
-                    # chave secundária por posicao_rotacao
-                    p = row.get("posicao", "")
-                    r = row.get("rotacao_deg", "")
-                    completed[f"{p}_{r}"] = row
+                    code_key = row.get("local_codigo", "").strip()
+                    if code_key:
+                        completed[code_key] = row
         except Exception as e:
             print(f"⚠️ Erro ao ler consolidado: {e}")
 
     concluidas_count = 0
-    for b in range(1, 17):
-        cfg = BATERIAS_CONFIG[b]
-        b_key = str(b)
-        pr_key = f"{cfg['posicao']}_{cfg['rotacao']}"
+    dmrt_means = []
+    sens_means = []
+    ref_means = []
 
-        r = completed.get(b_key) or completed.get(pr_key)
+    for loc_num in range(1, 7):
+        cfg = LOCALIDADES_CONFIG[loc_num]
+        r = completed.get(str(loc_num)) or completed.get(cfg["codigo"])
 
         if r:
             concluidas_count += 1
+            nome_exib = r.get("local_nome", cfg["nome"])[:24]
+            umid_str = f"{float(r.get('umidade_pct', 0.0)):.1f}%"
             leits = f"{r.get('leituras_detectadas_dmrt', r.get('leituras_executadas', '0'))}/{r['leituras_planejadas']}"
-            dmrt_str = f"{float(r['dmrt_medio']):+.2f} dB" if r.get('dmrt_medio') not in (None, 'N/A', '') else "N/A"
-            mrt_sens = f"{float(r['sensing_mrt_filt_medio']):.2f} dBm" if r.get('sensing_mrt_filt_medio') not in (None, 'N/A', '') else "N/A"
+            if r.get("dmrt_medio") not in (None, "N/A", ""):
+                d_val = float(r["dmrt_medio"])
+                d_std = float(r.get("dmrt_std", 0.0))
+                dmrt_str = f"{d_val:+.2f} ± {d_std:.2f} dB"
+                dmrt_means.append(d_val)
+            else:
+                dmrt_str = "N/A"
+
+            if r.get("sensing_mrt_filt_medio") not in (None, "N/A", ""):
+                s_val = float(r["sensing_mrt_filt_medio"])
+                mrt_sens = f"{s_val:.2f} dBm"
+                sens_means.append(s_val)
+            else:
+                mrt_sens = "N/A"
+
+            if r.get("ref_mrt_filt_medio") not in (None, "N/A", ""):
+                ref_val = float(r["ref_mrt_filt_medio"])
+                mrt_ref = f"{ref_val:.2f} dBm"
+                ref_means.append(ref_val)
+            else:
+                mrt_ref = "N/A"
+
             status = "✅ Concluída"
         else:
+            nome_exib = cfg["nome"][:24]
+            umid_str = "-"
             leits = f"0/{DEFAULT_TARGET_READINGS}"
             dmrt_str = "-"
             mrt_sens = "-"
+            mrt_ref = "-"
             status = "⏳ Pendente"
 
-        pos_str = f"{cfg['pos_label']} ({cfg['posicao']})"
-        print(f"| {b:02d}  | {pos_str:<18} | {cfg['rotacao']:>3}°   | {cfg['face']:<21} | {leits:<8} | {dmrt_str:<11} | {mrt_sens:<11} | {status:<11} |")
+        print(f"| {loc_num:02d}  | {cfg['codigo']:<10} | {nome_exib:<24} | {umid_str:<6} | {leits:<8} | {dmrt_str:<18} | {mrt_sens:<11} | {mrt_ref:<10} | {status:<11} |")
 
-    print("+" + "-" * 5 + "+" + "-" * 20 + "+" + "-" * 9 + "+" + "-" * 23 + "+" + "-" * 10 + "+" + "-" * 13 + "+" + "-" * 13 + "+" + "-" * 13 + "+")
-    pct_concluido = (concluidas_count / 16) * 100.0
-    print(f"Total concluídas: {concluidas_count} de 16 baterias ({pct_concluido:.1f}%)")
-    print("=" * 116 + "\n")
+    print("+" + "-" * 5 + "+" + "-" * 12 + "+" + "-" * 26 + "+" + "-" * 8 + "+" + "-" * 10 + "+" + "-" * 20 + "+" + "-" * 13 + "+" + "-" * 12 + "+" + "-" * 13 + "+")
+    pct_concluido = (concluidas_count / 6) * 100.0
+    print(f"Progresso: {concluidas_count} de 6 localizações concluídas ({pct_concluido:.1f}%)")
+
+    if len(dmrt_means) >= 2:
+        g_mean, g_std, g_min, g_max = calculate_stats(dmrt_means)
+        s_mean, s_std, s_min, s_max = calculate_stats(sens_means)
+        print("-" * 120)
+        print(f"📊 RESILIÊNCIA ENTRE LOCALIDADES ({len(dmrt_means)} locais):")
+        print(f"   • DMRT Global Inter-Localidades : {g_mean:+.2f} dB (± {g_std:.2f} dB) | Amplitude Máx-Mín: {(g_max - g_min):.2f} dB")
+        print(f"   • MRT Sensor Inter-Localidades  : {s_mean:.2f} dBm (± {s_std:.2f} dB) | Amplitude Máx-Mín: {(s_max - s_min):.2f} dB")
+    print("=" * 120 + "\n")
 
 
 # ===================================================================================
-# Consolidação de Dados e Gráficos Analíticos
+# Consolidação de Dados e Gráficos Analíticos de Resiliência
 # ===================================================================================
 
 def calculate_stats(values: List[float]) -> Tuple[float, float, float, float]:
@@ -436,8 +446,8 @@ def calculate_stats(values: List[float]) -> Tuple[float, float, float, float]:
     return mean_val, std_val, min(values), max(values)
 
 
-def update_consolidated_csv(csv_path: str, record_dict: dict, key_field: str = "bateria"):
-    """Atualiza ou insere registro na tabela CSV consolidada mantendo ordenação."""
+def update_consolidated_csv(csv_path: str, record_dict: dict, key_field: str = "local_num"):
+    """Atualiza ou insere registro na tabela CSV consolidada mantendo ordenação por local."""
     os.makedirs(os.path.dirname(os.path.abspath(csv_path)), exist_ok=True)
     rows_by_key = {}
 
@@ -461,15 +471,36 @@ def update_consolidated_csv(csv_path: str, record_dict: dict, key_field: str = "
     with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        for k in sorted(rows_by_key.keys(), key=lambda x: int(x) if x.isdigit() else x):
+        for k in sorted(rows_by_key.keys(), key=lambda x: int(x) if str(x).isdigit() else str(x)):
             writer.writerow(rows_by_key[k])
 
     print(f"📁 Tabela consolidada atualizada: {os.path.abspath(csv_path)}")
 
 
+def load_dmrt_series_for_location(csv_file: str) -> List[float]:
+    """Lê a série de 300 amostras de DMRT do arquivo CSV individual de uma localidade."""
+    if not csv_file or not os.path.exists(csv_file):
+        return []
+    vals = []
+    try:
+        with open(csv_file, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                v = row.get("dmrt")
+                if v not in (None, "", "N/A"):
+                    vals.append(float(v))
+    except Exception:
+        pass
+    return vals
+
+
 def generate_consolidated_charts():
-    """Gera os gráficos analíticos demonstrando a invariância angular e espacial do DMRT."""
+    """
+    Gera os gráficos analíticos do Experimento 8 comprovando a resiliência do DMRT
+    ao longo das 6 diferentes localizações sob a mesma umidade do solo.
+    """
     if not os.path.exists(CONSOLIDATED_CSV):
+        print(f"⚠️ Arquivo consolidado não encontrado em {CONSOLIDATED_CSV}.")
         return
 
     try:
@@ -483,126 +514,198 @@ def generate_consolidated_charts():
             for r in reader:
                 records.append(r)
 
-        if len(records) < 2:
-            return  # Gera apenas com 2 ou mais baterias concluídas
+        if not records:
+            return
+
+        # Ordena por local_num
+        records.sort(key=lambda x: int(x["local_num"]) if str(x.get("local_num", "")).isdigit() else 99)
+
+        labels = []
+        dmrt_means = []
+        dmrt_stds = []
+        sens_means = []
+        sens_stds = []
+        ref_means = []
+        ref_stds = []
+        sens_rssis = []
+        ref_rssis = []
+        dmrt_distributions = []
+
+        for r in records:
+            loc_num = int(r["local_num"]) if str(r.get("local_num", "")).isdigit() else 0
+            loc_name = r.get("local_nome", f"Local {loc_num:02d}")
+            short_lbl = f"L{loc_num:02d}\n({loc_name})" if len(loc_name) <= 16 else f"Local {loc_num:02d}"
+            labels.append(short_lbl)
+
+            d_m = float(r["dmrt_medio"]) if r.get("dmrt_medio") not in ("N/A", "", None) else 0.0
+            d_s = float(r["dmrt_std"]) if r.get("dmrt_std") not in ("N/A", "", None) else 0.0
+            s_m = float(r["sensing_mrt_filt_medio"]) if r.get("sensing_mrt_filt_medio") not in ("N/A", "", None) else 0.0
+            s_s = float(r["sensing_mrt_filt_std"]) if r.get("sensing_mrt_filt_std") not in ("N/A", "", None) else 0.0
+            rf_m = float(r["ref_mrt_filt_medio"]) if r.get("ref_mrt_filt_medio") not in ("N/A", "", None) else 0.0
+            rf_s = float(r["ref_mrt_filt_std"]) if r.get("ref_mrt_filt_std") not in ("N/A", "", None) else 0.0
+            s_r = float(r["sensing_rssi_medio"]) if r.get("sensing_rssi_medio") not in ("N/A", "", None) else 0.0
+            rf_r = float(r["ref_rssi_medio"]) if r.get("ref_rssi_medio") not in ("N/A", "", None) else 0.0
+
+            dmrt_means.append(d_m)
+            dmrt_stds.append(d_s)
+            sens_means.append(s_m)
+            sens_stds.append(s_s)
+            ref_means.append(rf_m)
+            ref_stds.append(rf_s)
+            sens_rssis.append(s_r)
+            ref_rssis.append(rf_r)
+
+            # Tenta carregar a distribuição de 300 leituras do CSV individual
+            csv_ind = r.get("arquivo_csv", "")
+            if not csv_ind or not os.path.exists(csv_ind):
+                code = r.get("local_codigo", f"local_{loc_num:02d}")
+                csv_ind = os.path.join(EXP8_DIR, f"{code}_resultados.csv")
+            dist = load_dmrt_series_for_location(csv_ind)
+            dmrt_distributions.append(dist if dist else [d_m])
+
+        x_idx = list(range(len(records)))
+        u_val = float(records[0].get("umidade_pct", 48.0))
+        valid_dmrts = [d for d in dmrt_means if d != 0.0]
+        g_dmrt_mean, g_dmrt_std, g_dmrt_min, g_dmrt_max = calculate_stats(valid_dmrts)
+        g_sens_mean, g_sens_std, g_sens_min, g_sens_max = calculate_stats([s for s in sens_means if s > 0])
 
         # ---------------------------------------------------------------------------
-        # Gráfico 1: Rotação vs DMRT e MRT Bruto para cada Posição Espacial
+        # Gráfico 1: Variação do DMRT nas Diferentes Localidades (Painel Duplo)
         # ---------------------------------------------------------------------------
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), dpi=150)
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6), dpi=150)
 
-        posicoes_unicas = sorted(list({r["posicao"] for r in records}))
-        pos_colors = {
-            "pos_centro": "#1f77b4",
-            "pos_esq": "#ff7f0e",
-            "pos_dir": "#2ca02c",
-            "pos_frente": "#d62728"
-        }
-        pos_labels = {
-            "pos_centro": "Centro",
-            "pos_esq": "Esquerda (-15cm)",
-            "pos_dir": "Direita (+15cm)",
-            "pos_frente": "Frente (+15cm)"
-        }
+        # Painel Esquerdo: Estabilidade / Variação do DMRT nas 6 Localidades
+        ax1.errorbar(
+            x_idx, dmrt_means, yerr=dmrt_stds, fmt="-o",
+            color="#2ca02c", ecolor="#66c2a5", elinewidth=2, capsize=5,
+            linewidth=2.5, markersize=8, label="DMRT Médio por Localidade (±1σ)"
+        )
+        if valid_dmrts:
+            ax1.axhline(
+                g_dmrt_mean, color="#006d2c", linestyle="--", linewidth=1.8,
+                label=f"Média Global DMRT: {g_dmrt_mean:+.2f} dB (σ={g_dmrt_std:.2f} dB)"
+            )
+            ax1.fill_between(
+                x_idx,
+                [g_dmrt_mean - g_dmrt_std] * len(x_idx),
+                [g_dmrt_mean + g_dmrt_std] * len(x_idx),
+                color="#2ca02c", alpha=0.15, label="Faixa de Estabilidade (±1σ Global)"
+            )
 
-        for pos in posicoes_unicas:
-            sub = [r for r in records if r["posicao"] == pos]
-            sub = sorted(sub, key=lambda x: int(x["rotacao_deg"]))
+        for i, val in enumerate(dmrt_means):
+            ax1.annotate(
+                f"{val:+.2f} dB",
+                (x_idx[i], dmrt_means[i]),
+                textcoords="offset points", xytext=(0, 12),
+                ha="center", fontsize=9, fontweight="bold", color="#00441b"
+            )
 
-            c = pos_colors.get(pos, "#9467bd")
-            lbl = pos_labels.get(pos, pos)
-
-            # Extrai pontos validos para DMRT
-            valid_dmrt_pts = [
-                (int(x["rotacao_deg"]), float(x["dmrt_medio"]), float(x["dmrt_std"]))
-                for x in sub
-                if x.get("dmrt_medio") not in ("N/A", "", None) and float(x.get("leituras_detectadas_dmrt", 0)) > 0
-            ]
-            if valid_dmrt_pts:
-                rot_d, d_val, d_std = zip(*valid_dmrt_pts)
-                ax1.errorbar(
-                    rot_d, d_val, yerr=d_std, fmt='-o',
-                    color=c, linewidth=2, markersize=7, capsize=4,
-                    label=f"DMRT: {lbl}"
-                )
-
-            # Extrai pontos validos para MRT Sensor
-            valid_mrt_pts = [
-                (int(x["rotacao_deg"]), float(x["sensing_mrt_filt_medio"]))
-                for x in sub
-                if float(x.get("sensing_mrt_filt_medio", 0)) > 0
-            ]
-            if valid_mrt_pts:
-                rot_m, m_val = zip(*valid_mrt_pts)
-                ax2.plot(
-                    rot_m, m_val, '--s',
-                    color=c, linewidth=1.8, markersize=6,
-                    label=f"MRT Sensor: {lbl}"
-                )
-
-        ax1.set_title("Estabilidade do DMRT pelas Rotações (Invariância Diferencial)", fontsize=11, fontweight="bold")
-        ax1.set_xlabel("Ângulo de Rotação do Vaso (Graus)", fontsize=10)
-        ax1.set_ylabel("DMRT Médio: MRT_sens - MRT_ref (dB)", fontsize=10)
-        ax1.set_xticks([0, 90, 180, 270])
+        ax1.set_title("Resiliência do DMRT nas Diferentes Localidades", fontsize=11, fontweight="bold")
+        ax1.set_xlabel("Localizações Avaliadas", fontsize=10)
+        ax1.set_ylabel("DMRT = MRT_sens - MRT_ref (dB)", fontsize=10)
+        ax1.set_xticks(x_idx)
+        ax1.set_xticklabels(labels, fontsize=9)
+        if valid_dmrts:
+            y_margin = max(2.5, (g_dmrt_max - g_dmrt_min) * 1.2 + 1.5)
+            ax1.set_ylim(g_dmrt_mean - y_margin, g_dmrt_mean + y_margin)
         ax1.grid(True, linestyle="--", alpha=0.5)
-        ax1.legend(loc="best", fontsize=9)
+        ax1.legend(loc="best", fontsize=9, frameon=True)
 
-        ax2.set_title("Flutuações do MRT Absoluto da Tag de Sensoriamento", fontsize=11, fontweight="bold")
-        ax2.set_xlabel("Ângulo de Rotação do Vaso (Graus)", fontsize=10)
-        ax2.set_ylabel("MRT Filtrado Médio da Tag de Sensoriamento (dBm)", fontsize=10)
-        ax2.set_xticks([0, 90, 180, 270])
+        # Painel Direito: MRT Sensor e MRT Referência vs DMRT (Cancelamento de Modo Comum)
+        ax2.errorbar(
+            x_idx, sens_means, yerr=sens_stds, fmt="-s",
+            color="#1f77b4", linewidth=2, markersize=7, capsize=4,
+            label=f"MRT Sensoriamento (σ={g_sens_std:.2f} dB)"
+        )
+        ax2.errorbar(
+            x_idx, ref_means, yerr=ref_stds, fmt="-^",
+            color="#ff7f0e", linewidth=2, markersize=7, capsize=4,
+            label="MRT Referência (Canal/Ambiente)"
+        )
+        ax2.plot(
+            x_idx, dmrt_means, "-o",
+            color="#2ca02c", linewidth=2.2, markersize=7,
+            label="DMRT Diferencial (Sens - Ref)"
+        )
+
+        ax2.set_title("Cancelamento de Modo Comum: MRT Bruto vs DMRT", fontsize=11, fontweight="bold")
+        ax2.set_xlabel("Localizações Avaliadas", fontsize=10)
+        ax2.set_ylabel("Limiar de Potência / Diferencial (dBm / dB)", fontsize=10)
+        ax2.set_xticks(x_idx)
+        ax2.set_xticklabels(labels, fontsize=9)
         ax2.grid(True, linestyle="--", alpha=0.5)
-        ax2.legend(loc="best", fontsize=9)
+        ax2.legend(loc="best", fontsize=9, frameon=True)
 
-        u_val = float(records[0].get("umidade_pct", 70.0))
-        fig.suptitle(f"Experimento 7: Impacto da Rotação e Posição sob Umidade Fixa ({u_val:.1f}%)\nDemonstração de Invariância do DMRT vs Sensibilidade do MRT Bruto", fontsize=12, fontweight="bold")
+        fig.suptitle(
+            f"Experimento 8: Variação do DMRT em {len(records)} Diferentes Localizações sob Mesma Umidade ({u_val:.1f}%)\n"
+            f"Comprovação da Resiliência Ambiental da Métrica Diferencial (300 medições/local)",
+            fontsize=12, fontweight="bold"
+        )
         fig.tight_layout()
-        os.makedirs(os.path.dirname(os.path.abspath(CHART_ROTATION_DMRT)), exist_ok=True)
-        plt.savefig(CHART_ROTATION_DMRT, format="png", bbox_inches="tight")
+        os.makedirs(os.path.dirname(os.path.abspath(CHART_DMRT_LOCATIONS)), exist_ok=True)
+        plt.savefig(CHART_DMRT_LOCATIONS, format="png", bbox_inches="tight")
         plt.close()
-        print(f"📈 Gráfico Rotação vs DMRT gerado: {os.path.abspath(CHART_ROTATION_DMRT)}")
+        print(f"📈 Gráfico de Variação do DMRT por Localidade gerado: {os.path.abspath(CHART_DMRT_LOCATIONS)}")
 
         # ---------------------------------------------------------------------------
-        # Gráfico 2: Comparativo Espacial (Por Posição na Bancada)
+        # Gráfico 2: Distribuição Boxplot (300 leituras/local) e Comparativo de Barras
         # ---------------------------------------------------------------------------
-        fig, ax = plt.subplots(figsize=(10, 5), dpi=150)
-        pos_labels_list = []
-        dmrt_by_pos = []
-        sens_by_pos = []
-        rssi_by_pos = []
+        fig, (bx1, bx2) = plt.subplots(1, 2, figsize=(15, 6), dpi=150)
 
-        for pos in posicoes_unicas:
-            sub = [r for r in records if r["posicao"] == pos]
-            p_lbl = pos_labels.get(pos, pos)
-            pos_labels_list.append(p_lbl)
+        # Subgráfico 1: Boxplot das 300 medições de DMRT em cada localidade
+        bp = bx1.boxplot(
+            dmrt_distributions,
+            positions=x_idx,
+            widths=0.45,
+            patch_artist=True,
+            showmeans=True,
+            meanprops={"marker": "D", "markerfacecolor": "#00441b", "markeredgecolor": "white", "markersize": 6}
+        )
+        for patch in bp["boxes"]:
+            patch.set_facecolor("#a1d99b")
+            patch.set_edgecolor("#2ca02c")
+            patch.set_alpha(0.85)
+        for median in bp["medians"]:
+            median.set_color("#00441b")
+            median.set_linewidth(2)
 
-            valid_dmrt = [float(x["dmrt_medio"]) for x in sub if x.get("dmrt_medio") not in ("N/A", "", None) and float(x.get("leituras_detectadas_dmrt", 0)) > 0]
-            valid_sens = [float(x["sensing_mrt_filt_medio"]) for x in sub if float(x.get("sensing_mrt_filt_medio", 0)) > 0]
-            valid_rssi = [float(x["sensing_rssi_medio"]) for x in sub if float(x.get("sensing_rssi_medio", 0)) < 0]
+        if valid_dmrts:
+            bx1.axhline(
+                g_dmrt_mean, color="#006d2c", linestyle="--", linewidth=1.5,
+                label=f"Média Global ({g_dmrt_mean:+.2f} dB)"
+            )
+            bx1.legend(loc="best", fontsize=9)
 
-            dmrt_by_pos.append(sum(valid_dmrt) / len(valid_dmrt) if valid_dmrt else 0.0)
-            sens_by_pos.append(sum(valid_sens) / len(valid_sens) if valid_sens else 0.0)
-            rssi_by_pos.append(sum(valid_rssi) / len(valid_rssi) if valid_rssi else 0.0)
+        bx1.set_title("Distribuição das 300 Medições de DMRT por Localidade", fontsize=11, fontweight="bold")
+        bx1.set_xlabel("Localizações Avaliadas", fontsize=10)
+        bx1.set_ylabel("DMRT (dB)", fontsize=10)
+        bx1.set_xticks(x_idx)
+        bx1.set_xticklabels(labels, fontsize=9)
+        bx1.grid(True, linestyle="--", alpha=0.5, axis="y")
 
-        x_indices = range(len(posicoes_unicas))
-        width = 0.25
+        # Subgráfico 2: Barras Agrupadas (DMRT vs MRT Sensor vs MRT Ref)
+        width = 0.26
+        bx2.bar([i - width for i in x_idx], dmrt_means, width, yerr=dmrt_stds, capsize=3, label="DMRT Médio (dB)", color="#2ca02c")
+        bx2.bar(x_idx, sens_means, width, yerr=sens_stds, capsize=3, label="MRT Sensor Médio (dBm)", color="#1f77b4")
+        bx2.bar([i + width for i in x_idx], ref_means, width, yerr=ref_stds, capsize=3, label="MRT Ref Médio (dBm)", color="#ff7f0e")
 
-        ax.bar([i - width for i in x_indices], dmrt_by_pos, width, label="DMRT Médio (dB)", color="#2ca02c")
-        ax.bar([i for i in x_indices], sens_by_pos, width, label="MRT Sensor Médio (dBm)", color="#1f77b4")
-        ax.bar([i + width for i in x_indices], [abs(r) for r in rssi_by_pos], width, label="|RSSI| Sensor Médio (dBm)", color="#ff7f0e")
+        bx2.set_title("Comparativo de Magnitude por Localidade (DMRT vs MRTs)", fontsize=11, fontweight="bold")
+        bx2.set_xlabel("Localizações Avaliadas", fontsize=10)
+        bx2.set_ylabel("Magnitude (dB / dBm)", fontsize=10)
+        bx2.set_xticks(x_idx)
+        bx2.set_xticklabels(labels, fontsize=9)
+        bx2.grid(True, linestyle="--", alpha=0.4, axis="y")
+        bx2.legend(loc="best", fontsize=9)
 
-        ax.set_xticks(list(x_indices))
-        ax.set_xticklabels(pos_labels_list, fontsize=10, fontweight="bold")
-        ax.set_ylabel("Magnitude (dB / dBm)", fontsize=10)
-        ax.set_title("Comparativo Espacial: Robustez do DMRT vs Flutuações de MRT e RSSI", fontsize=11, fontweight="bold")
-        ax.grid(True, linestyle="--", alpha=0.4, axis="y")
-        ax.legend(loc="upper right", fontsize=9)
-
+        fig.suptitle(
+            f"Experimento 8: Dispersão Amostral (300 leituras/local) e Comparativo de Métricas ({u_val:.1f}% Umidade)",
+            fontsize=12, fontweight="bold"
+        )
         fig.tight_layout()
-        os.makedirs(os.path.dirname(os.path.abspath(CHART_SPATIAL_DMRT)), exist_ok=True)
-        plt.savefig(CHART_SPATIAL_DMRT, format="png", bbox_inches="tight")
+        os.makedirs(os.path.dirname(os.path.abspath(CHART_METRICS_COMPARISON)), exist_ok=True)
+        plt.savefig(CHART_METRICS_COMPARISON, format="png", bbox_inches="tight")
         plt.close()
-        print(f"📈 Gráfico Espacial vs Métricas gerado: {os.path.abspath(CHART_SPATIAL_DMRT)}")
+        print(f"📈 Gráfico Comparativo de Métricas e Boxplot gerado: {os.path.abspath(CHART_METRICS_COMPARISON)}")
 
     except Exception as e:
         print(f"⚠️ Não foi possível gerar gráficos consolidados: {e}")
@@ -614,19 +717,15 @@ def generate_consolidated_charts():
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Experimento 7: Invariância Espacial e Angular do DMRT sob Umidade Fixa do Solo"
+        description="Experimento 8: Resiliência do DMRT em 6 Diferentes Localizações sob Mesma Umidade"
     )
     parser.add_argument(
-        "--bateria", type=int, choices=list(range(1, 17)), default=None,
-        help="Número da bateria do catálogo (1 a 16). Define posição espacial e ângulo de rotação automaticamente."
+        "--local", "--bateria", dest="local", type=int, choices=list(range(1, 7)), default=None,
+        help="Número da localização (1 a 6) onde o setup foi posicionado."
     )
     parser.add_argument(
-        "--posicao", type=str, default=None,
-        help="Localização espacial do vaso na bancada (ex: pos_centro, pos_esq, pos_dir, pos_frente, etc.)"
-    )
-    parser.add_argument(
-        "--rotacao", type=int, choices=[0, 90, 180, 270], default=None,
-        help="Ângulo de rotação da tag / vaso em graus (0, 90, 180, 270)"
+        "--nome", "--posicao", dest="nome_local", type=str, default=None,
+        help="Nome ou descrição opcional da localização (ex: 'Bancada Central', 'Sala 2', 'Corredor')."
     )
     parser.add_argument(
         "--umidade", type=float, default=None,
@@ -634,11 +733,11 @@ def parse_arguments():
     )
     parser.add_argument(
         "--readings", type=int, default=DEFAULT_TARGET_READINGS,
-        help=f"Quantidade de varreduras por bateria (padrão: {DEFAULT_TARGET_READINGS})"
+        help=f"Quantidade de medições de DMRT por localidade (padrão: {DEFAULT_TARGET_READINGS})"
     )
     parser.add_argument(
         "--dwell", type=float, default=0.12,
-        help="Tempo de permanência RF em segundos por nível (padrão: 0.12s para varredura rápida)"
+        help="Tempo de permanência RF em segundos por nível (padrão: 0.12s)"
     )
     parser.add_argument(
         "--power-step", type=float, default=1.0,
@@ -678,7 +777,11 @@ def parse_arguments():
     )
     parser.add_argument(
         "--status", action="store_true",
-        help="Exibe a tabela consolidada das baterias e encerra"
+        help="Exibe a tabela consolidada das 6 localizações e encerra"
+    )
+    parser.add_argument(
+        "--plot", "--gerar-graficos", dest="plot_only", action="store_true",
+        help="Regenera os gráficos consolidados de variação do DMRT a partir dos dados já coletados e encerra"
     )
     return parser.parse_args()
 
@@ -691,33 +794,28 @@ def main():
         show_experiment_status()
         return
 
-    # 1. Determina Configuração da Rodada Atual
-    bateria_num = args.bateria
+    # Se o usuário solicitou apenas regenerar os gráficos consolidados
+    if args.plot_only:
+        generate_consolidated_charts()
+        show_experiment_status()
+        return
 
-    if bateria_num is not None:
-        cfg = BATERIAS_CONFIG[bateria_num]
-        posicao = cfg["posicao"]
-        rotacao_deg = cfg["rotacao"]
-        face_nome = cfg["face"]
-        pos_label = cfg["pos_label"]
-        slug = f"bateria_{bateria_num:02d}_{posicao}_rot_{rotacao_deg}deg"
-    else:
-        posicao = args.posicao or "pos_centro"
-        rotacao_deg = args.rotacao if args.rotacao is not None else 0
-        face_nome = f"Rotação {rotacao_deg}°"
-        pos_label = posicao
-        slug = f"ensaio_{posicao}_rot_{rotacao_deg}deg"
+    # 1. Determina a Localização Atual (1 a 6)
+    local_num = args.local if args.local is not None else 1
+    cfg = LOCALIDADES_CONFIG[local_num]
+    local_code = cfg["codigo"]
+    local_name = args.nome_local.strip() if args.nome_local else cfg["nome"]
 
-    # Determina umidade do solo fixa
+    # Determina umidade fixa do solo
     if args.umidade is not None:
         umidade_pct = args.umidade
     else:
         last_u = get_last_recorded_moisture()
         umidade_pct = last_u if last_u is not None else 48.0
 
-    csv_path = os.path.join(EXP7_DIR, f"{slug}_resultados.csv")
-    chart_path = os.path.join(EXP7_DIR, f"{slug}_grafico.png")
-    setup_title = f"Experimento 7: {slug.upper()} (Pos: {posicao}, Rot: {rotacao_deg}°, Umid: {umidade_pct:.1f}%)"
+    csv_path = os.path.join(EXP8_DIR, f"{local_code}_resultados.csv")
+    chart_path = os.path.join(EXP8_DIR, f"{local_code}_grafico.png")
+    setup_title = f"Experimento 8 - {local_code.upper()} ({local_name} | Umidade: {umidade_pct:.1f}%)"
 
     # 2. Conecta ao Leitor (ou Instancia Mock)
     reader = None
@@ -733,14 +831,13 @@ def main():
     sensing_epc, ref_epc = resolve_tags(args, reader=reader)
 
     if args.simulado:
-        reader = MockReaderForExp7(
+        reader = MockReaderForExp8(
             port=args.port,
             baudrate=args.baudrate,
             sensing_epc=sensing_epc,
             ref_epc=ref_epc,
             moisture_pct=umidade_pct,
-            rotation_deg=rotacao_deg,
-            position=posicao
+            local_num=local_num
         )
         reader.connect()
 
@@ -748,20 +845,17 @@ def main():
 
     # 4. Banner Informativo do Setup
     print("=" * 112)
-    print("      IN-R200 UHF RFID Reader - EXPERIMENTO 7: INVARIÂNCIA ESPACIAL E ANGULAR (DMRT/MRT/RSSI)")
+    print("      IN-R200 UHF RFID Reader - EXPERIMENTO 8: RESILIÊNCIA DO DMRT EM 6 LOCALIZAÇÕES")
     print("=" * 112)
-    if bateria_num:
-        print(f"📦 Bateria             : {bateria_num:02d} de 16 ({pos_label} | {face_nome})")
-    print(f"📍 Localização Espacial: {posicao} ({pos_label})")
-    print(f"🔄 Rotação do Vaso      : {rotacao_deg}° ({face_nome})")
-    print(f"💧 Umidade do Solo Fixa : {umidade_pct:.1f}% (Sensor RainPoint)")
-    print(f"🏷️  Tag Sensoriamento    : {sensing_epc} (Vaso de solo)")
-    print(f"🏷️  Tag Referência       : {ref_epc} (Isolada de referência)")
-    print(f"⚡ Faixa de Potência    : {args.min_power:.1f} dBm a {args.max_power:.1f} dBm (passo {args.power_step} dBm com early-stop)")
-    print(f"⏱️  Tempo Dwell/Nível   : {args.dwell:.3f} s")
-    print(f"🎯 Meta de Leituras     : {target_readings} varreduras completas")
-    print(f"📁 Arquivo CSV          : {csv_path}")
-    print(f"📈 Gráfico PNG          : {chart_path}")
+    print(f"📍 Localização         : {local_num:02d} de 06 — {local_name} ({local_code})")
+    print(f"💧 Umidade do Solo Fixa: {umidade_pct:.1f}% (Sensor RainPoint)")
+    print(f"🏷️  Tag Sensoriamento   : {sensing_epc} (Vaso de solo)")
+    print(f"🏷️  Tag Referência      : {ref_epc} (Isolada de referência)")
+    print(f"⚡ Faixa de Potência   : {args.min_power:.1f} dBm a {args.max_power:.1f} dBm (passo {args.power_step} dBm com early-stop)")
+    print(f"⏱️  Tempo Dwell/Nível  : {args.dwell:.3f} s")
+    print(f"🎯 Meta de Leituras    : {target_readings} medições de DMRT")
+    print(f"📁 Arquivo CSV         : {csv_path}")
+    print(f"📈 Gráfico PNG         : {chart_path}")
     print("=" * 112)
 
     # 5. Inicializa Calculadora MRT e Exportador DMRT
@@ -786,7 +880,7 @@ def main():
 
     dmrt_hist: List[float] = []
 
-    print(f"\n📡 Iniciando as {target_readings} leituras com parada antecipada otimizada...")
+    print(f"\n📡 Iniciando as {target_readings} medições na {local_name} ({local_code})...")
     print("   (Pressione Ctrl+C a qualquer momento para finalizar e salvar os dados parciais)\n")
 
     reading_counter = 0
@@ -865,21 +959,21 @@ def main():
                 ref_rssi=r_data["rssi"] if r_data else None,
                 dmrt=dmrt_val,
                 moisture_pct=umidade_pct,
-                rotation_deg=float(rotacao_deg),
-                position=posicao
+                rotation_deg=0.0,
+                position=local_code
             )
 
             # Log resumido por linha
             s_str = f"S:{s_data['filtered_mrt']:.1f}dBm" if s_data else "S:MISS"
             r_str = f"R:{r_data['filtered_mrt']:.1f}dBm" if r_data else "R:MISS"
             d_str = f"DMRT:{dmrt_val:+.2f}dB" if dmrt_val is not None else "DMRT:N/A"
-            print(f"  ⚡ [{reading_counter:04d}/{target_readings}] {s_str} | {r_str} | {d_str} | Tempo: {dt_sweep:.2f}s")
+            print(f"  ⚡ [{reading_counter:04d}/{target_readings}] {local_code} | {s_str} | {r_str} | {d_str} | Tempo: {dt_sweep:.2f}s")
 
             # Tabela periódica
             if reading_counter % 10 == 0 or reading_counter == target_readings:
                 print_table(
-                    reading_counter, target_readings, bateria_num,
-                    umidade_pct, rotacao_deg, posicao, sensing_epc, ref_epc,
+                    reading_counter, target_readings, local_num, local_code, local_name,
+                    umidade_pct, sensing_epc, ref_epc,
                     sens_hist_raw, sens_hist_filt, sens_hist_rssi,
                     ref_hist_raw, ref_hist_filt, ref_hist_rssi,
                     dmrt_hist, current_time
@@ -911,14 +1005,13 @@ def main():
         r_filt_mean, r_filt_std, _, _ = calculate_stats(ref_hist_filt)
         r_rssi_mean, r_rssi_std, _, _ = calculate_stats(ref_hist_rssi)
 
-        dmrt_mean, dmrt_std, _, _ = calculate_stats(dmrt_hist)
+        dmrt_mean, dmrt_std, dmrt_min, dmrt_max = calculate_stats(dmrt_hist)
 
         # Registro para tabela consolidada
-        key_val = str(bateria_num) if bateria_num else f"{posicao}_r{rotacao_deg}"
         record_entry = {
-            "bateria": key_val,
-            "posicao": posicao,
-            "rotacao_deg": rotacao_deg,
+            "local_num": local_num,
+            "local_codigo": local_code,
+            "local_nome": local_name,
             "umidade_pct": f"{umidade_pct:.1f}",
             "leituras_planejadas": target_readings,
             "leituras_executadas": reading_counter,
@@ -936,16 +1029,19 @@ def main():
             "ref_mrt_filt_std": f"{r_filt_std:.2f}",
             "dmrt_medio": f"{dmrt_mean:.2f}" if dmrt_hist else "N/A",
             "dmrt_std": f"{dmrt_std:.2f}" if dmrt_hist else "N/A",
+            "dmrt_min": f"{dmrt_min:.2f}" if dmrt_hist else "N/A",
+            "dmrt_max": f"{dmrt_max:.2f}" if dmrt_hist else "N/A",
             "sensing_rssi_medio": f"{s_rssi_mean:.1f}",
             "sensing_rssi_std": f"{s_rssi_std:.2f}",
             "ref_rssi_medio": f"{r_rssi_mean:.1f}",
             "ref_rssi_std": f"{r_rssi_std:.2f}",
             "sensing_epc": sensing_epc,
             "reference_epc": ref_epc,
+            "arquivo_csv": csv_path,
             "data_hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        update_consolidated_csv(CONSOLIDATED_CSV, record_entry, key_field="bateria")
+        update_consolidated_csv(CONSOLIDATED_CSV, record_entry, key_field="local_num")
         generate_consolidated_charts()
 
     # Relatório Final
@@ -957,24 +1053,23 @@ def main():
     print("=" * 112)
     print(f"📌 Tag Sensoriamento : {sensing_epc} (Vaso de solo)")
     print(f"📌 Tag Referência    : {ref_epc} (Isolada de referência)")
-    print(f"📍 Local / Posição   : {posicao}")
-    print(f"🔄 Rotação do Vaso   : {rotacao_deg}° ({face_nome})")
+    print(f"📍 Localização       : {local_num:02d}/06 - {local_name} ({local_code})")
     print(f"💧 Umidade Fixa Solo : {umidade_pct:.1f}%")
-    print(f"🔢 Varreduras        : {reading_counter} realizadas ({len(dmrt_hist)} pares válidos com DMRT)")
+    print(f"🔢 Medições          : {reading_counter} realizadas ({len(dmrt_hist)} pares válidos com DMRT)")
     print("-" * 112)
     print(f"🎯 Sensor MRT (EMA)  : {s_filt_mean:.2f} dBm  (± {s_filt_std:.2f} dB) | RSSI: {s_rssi_fmt}")
     print(f"🎯 Referência MRT    : {r_filt_mean:.2f} dBm  (± {r_filt_std:.2f} dB) | RSSI: {r_rssi_fmt}")
     print(f"⚖️  DMRT Médio (ΔMRT): {dmrt_mean:+.2f} dB   (± {dmrt_std:.2f} dB)")
     print("-" * 112)
-    print(f"👉 RESULTADO DA RODADA: DMRT = {dmrt_mean:+.2f} dB | Sensor MRT = {s_filt_mean:.2f} dBm")
+    print(f"👉 RESULTADO DA LOCALIDADE {local_num:02d}: DMRT = {dmrt_mean:+.2f} dB | Sensor MRT = {s_filt_mean:.2f} dBm")
     print("=" * 112)
-    print(f"✅ CSV da rodada salvo em          : {os.path.abspath(csv_path)}")
-    print(f"✅ Gráfico da rodada salvo em      : {os.path.abspath(chart_path)}")
-    print(f"✅ Tabela consolidada salva em     : {os.path.abspath(CONSOLIDATED_CSV)}")
-    if os.path.exists(CHART_ROTATION_DMRT):
-        print(f"✅ Curva Rotação vs DMRT gerada em : {os.path.abspath(CHART_ROTATION_DMRT)}")
-    if os.path.exists(CHART_SPATIAL_DMRT):
-        print(f"✅ Curva Espacial vs DMRT gerada em: {os.path.abspath(CHART_SPATIAL_DMRT)}")
+    print(f"✅ CSV da localidade salvo em       : {os.path.abspath(csv_path)}")
+    print(f"✅ Gráfico da localidade salvo em   : {os.path.abspath(chart_path)}")
+    print(f"✅ Tabela consolidada salva em      : {os.path.abspath(CONSOLIDATED_CSV)}")
+    if os.path.exists(CHART_DMRT_LOCATIONS):
+        print(f"✅ Gráfico Variação DMRT gerado em  : {os.path.abspath(CHART_DMRT_LOCATIONS)}")
+    if os.path.exists(CHART_METRICS_COMPARISON):
+        print(f"✅ Gráfico Comparativo gerado em    : {os.path.abspath(CHART_METRICS_COMPARISON)}")
     print("=" * 112)
 
 
