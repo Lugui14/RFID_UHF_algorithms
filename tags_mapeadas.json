@@ -65,6 +65,264 @@
       "funcao": "referencia",
       "setup": "7",
       "data_cadastro": "2026-10-06"
+    },
+    "E2806995000050136FD0C175": {
+      "nome": "sensoriamento-9",
+      "funcao": "sensoriamento",
+      "setup": "9",
+      "data_cadastro": "2026-10-30"
+    },
+    "E2806995000040136FD0C575": {
+      "nome": "9-01 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-01",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD0C975": {
+      "nome": "9-01 - Referência",
+      "funcao": "referencia",
+      "setup": "9-01",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD0D175": {
+      "nome": "9-02 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-02",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD0CD75": {
+      "nome": "9-02 - Referência",
+      "funcao": "referencia",
+      "setup": "9-02",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD0D975": {
+      "nome": "9-03 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-03",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD0D575": {
+      "nome": "9-03 - Referência",
+      "funcao": "referencia",
+      "setup": "9-03",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD0DD75": {
+      "nome": "9-04 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-04",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD0E175": {
+      "nome": "9-04 - Referência",
+      "funcao": "referencia",
+      "setup": "9-04",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD0E575": {
+      "nome": "9-05 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-05",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD0E975": {
+      "nome": "9-05 - Referência",
+      "funcao": "referencia",
+      "setup": "9-05",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD0F175": {
+      "nome": "9-06 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-06",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD0ED75": {
+      "nome": "9-06 - Referência",
+      "funcao": "referencia",
+      "setup": "9-06",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD0F975": {
+      "nome": "9-07 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-07",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD0F575": {
+      "nome": "9-07 - Referência",
+      "funcao": "referencia",
+      "setup": "9-07",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD0FD75": {
+      "nome": "09-08 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "09-08",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD10175": {
+      "nome": "09-08 - Referência",
+      "funcao": "referencia",
+      "setup": "09-08",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD10575": {
+      "nome": "9-09 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-09",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD10975": {
+      "nome": "9-09 - Referência",
+      "funcao": "referencia",
+      "setup": "9-09",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD10D75": {
+      "nome": "9-10 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-10",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD11175": {
+      "nome": "9-10 - Referência",
+      "funcao": "referencia",
+      "setup": "9-10",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD11575": {
+      "nome": "9-11 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-11",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD11975": {
+      "nome": "9-11 - Referência",
+      "funcao": "referencia",
+      "setup": "9-11",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD11D75": {
+      "nome": "9-12 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-12",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD12175": {
+      "nome": "9-12 - Referência",
+      "funcao": "referencia",
+      "setup": "9-12",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD12575": {
+      "nome": "9-13 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-13",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD12975": {
+      "nome": "9-13 - Referência",
+      "funcao": "referencia",
+      "setup": "9-13",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD12D75": {
+      "nome": "9-14 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-14",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD13175": {
+      "nome": "9-14 - Referência",
+      "funcao": "referencia",
+      "setup": "9-14",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD13575": {
+      "nome": "9-15 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-15",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD13975": {
+      "nome": "9-15 - Referência",
+      "funcao": "referencia",
+      "setup": "9-15",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD13D75": {
+      "nome": "9-16 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-16",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD14175": {
+      "nome": "9-16 - Referência",
+      "funcao": "referencia",
+      "setup": "9-16",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD14575": {
+      "nome": "9-17 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-17",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD14975": {
+      "nome": "9-17 - Referência",
+      "funcao": "referencia",
+      "setup": "9-17",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000050136FD14D75": {
+      "nome": "9-18 - Sensoriamento",
+      "funcao": "sensoriamento",
+      "setup": "9-18",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    "E2806995000040136FD0BD75": {
+      "nome": "9-18 - Referência",
+      "funcao": "referencia",
+      "setup": "9-18",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
     }
   },
   "pares": [
@@ -109,6 +367,138 @@
       "sensoriamento": "E2806995000050136FD0B575",
       "referencia": "E2806995000050136FD0B975",
       "data_cadastro": "2026-10-20"
+    },
+    {
+      "experimento": "Experimento 9 - DMRT vs RainPoint vs Ground Truth Gravimétrico",
+      "sensoriamento": "E2806995000050136FD0C175",
+      "referencia": "E2806995000050136FD0B975",
+      "data_cadastro": "2026-10-30"
+    },
+    {
+      "experimento": "9-01",
+      "sensoriamento": "E2806995000040136FD0C575",
+      "referencia": "E2806995000040136FD0C975",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-02",
+      "sensoriamento": "E2806995000040136FD0D175",
+      "referencia": "E2806995000050136FD0CD75",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-03",
+      "sensoriamento": "E2806995000050136FD0D975",
+      "referencia": "E2806995000050136FD0D575",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-04",
+      "sensoriamento": "E2806995000040136FD0DD75",
+      "referencia": "E2806995000040136FD0E175",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-05",
+      "sensoriamento": "E2806995000050136FD0E575",
+      "referencia": "E2806995000050136FD0E975",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-06",
+      "sensoriamento": "E2806995000050136FD0F175",
+      "referencia": "E2806995000040136FD0ED75",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-07",
+      "sensoriamento": "E2806995000040136FD0F975",
+      "referencia": "E2806995000040136FD0F575",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "09-08",
+      "sensoriamento": "E2806995000050136FD0FD75",
+      "referencia": "E2806995000040136FD10175",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-09",
+      "sensoriamento": "E2806995000050136FD10575",
+      "referencia": "E2806995000050136FD10975",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-10",
+      "sensoriamento": "E2806995000040136FD10D75",
+      "referencia": "E2806995000050136FD11175",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-11",
+      "sensoriamento": "E2806995000040136FD11575",
+      "referencia": "E2806995000040136FD11975",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-12",
+      "sensoriamento": "E2806995000050136FD11D75",
+      "referencia": "E2806995000050136FD12175",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-13",
+      "sensoriamento": "E2806995000040136FD12575",
+      "referencia": "E2806995000040136FD12975",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-14",
+      "sensoriamento": "E2806995000050136FD12D75",
+      "referencia": "E2806995000040136FD13175",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-15",
+      "sensoriamento": "E2806995000050136FD13575",
+      "referencia": "E2806995000050136FD13975",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-16",
+      "sensoriamento": "E2806995000040136FD13D75",
+      "referencia": "E2806995000050136FD14175",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-17",
+      "sensoriamento": "E2806995000040136FD14575",
+      "referencia": "E2806995000040136FD14975",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
+    },
+    {
+      "experimento": "9-18",
+      "sensoriamento": "E2806995000050136FD14D75",
+      "referencia": "E2806995000040136FD0BD75",
+      "observacoes": "",
+      "data_cadastro": "2026-11-05"
     }
   ]
 }
